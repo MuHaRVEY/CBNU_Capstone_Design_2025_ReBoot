@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'home_page.dart';
-import 'login_page.dart';
-import 'signup_page.dart';
+import 'first_page.dart'; // FirstPage 불러오기
 
 void main() {
   runApp(RebootApp());
@@ -12,14 +10,8 @@ class RebootApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Re:Boot',
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-      ),
-      home: HomePage(),
-      routes: {
-        '/login': (context) => LoginPage(),
-        '/signup': (context) => SignupPage(),
-      },
+      home: FirstPage(), // 첫 페이지로 FirstPage 설정
+      debugShowCheckedModeBanner: false,
     );
   }
 }
