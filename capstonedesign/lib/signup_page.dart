@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'signup_confirm_page.dart'; // 확인 페이지 import
 
 class SignupPage extends StatefulWidget {
   @override
@@ -147,7 +148,13 @@ class _SignupPageState extends State<SignupPage> {
                     height: 50,
                     child: ElevatedButton(
                       onPressed: () {
-                        // 회원가입 처리
+                        // 회원가입 후 확인 페이지로 이동
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SignupConfirmPage(),
+                          ),
+                        );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green.shade600,
