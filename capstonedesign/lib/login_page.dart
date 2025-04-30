@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'find_password.dart';
+import 'find_id.dart';
+import 'homepage.dart'; // ✅ 추가
 
 class LoginPage extends StatefulWidget {
   @override
@@ -97,7 +100,12 @@ class _LoginPageState extends State<LoginPage> {
                     height: 50,
                     child: ElevatedButton(
                       onPressed: () {
-                        // 로그인 처리
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const HomePage(),
+                          ),
+                        );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green.shade600,
@@ -111,9 +119,25 @@ class _LoginPageState extends State<LoginPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      TextButton(onPressed: () {}, child: Text('ID 찾기')),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const FindIdPage()),
+                          );
+                        },
+                        child: Text('ID 찾기'),
+                      ),
                       Text('|', style: TextStyle(color: Colors.grey)),
-                      TextButton(onPressed: () {}, child: Text('PW 찾기')),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const FindPasswordPage()),
+                          );
+                        },
+                        child: Text('PW 찾기'),
+                      ),
                       Text('|', style: TextStyle(color: Colors.grey)),
                       TextButton(onPressed: () {}, child: Text('회원가입')),
                     ],
