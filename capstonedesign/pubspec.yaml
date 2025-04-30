@@ -55,6 +55,7 @@ flutter:
     - assets/images/image_firstpage_login.png
     - assets/images/image_app_homepage.png
     - assets/images/image_app_start.png
+    - assets/images/image_plogging_sample.jpg
 
 
   # The following line ensures that the Material Icons font is
