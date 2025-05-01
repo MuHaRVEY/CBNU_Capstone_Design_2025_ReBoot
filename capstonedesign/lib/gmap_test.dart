@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
+import 'package:location/location.dart';
+import 'package:geolocator/geolocator.dart';
 
 class MapStateTest extends StatefulWidget{
   @override
@@ -13,7 +14,7 @@ class _MapStateTest extends State<MapStateTest>{
 
   final LatLng _center = const LatLng(37.56520450, 126.98702028);
 
-  void _onMapCreated(GoogleMapController controller){
+  void _onMapCreated(GoogleMapController controller) async {
     mapController = controller;
   }
 
@@ -27,13 +28,36 @@ class _MapStateTest extends State<MapStateTest>{
         ),
         body: GoogleMap(
           onMapCreated: _onMapCreated,
+          myLocationEnabled: true,
+          myLocationButtonEnabled: true,
           initialCameraPosition: CameraPosition(
               target: _center,
-          zoom: 11.0
+          zoom: 20.0
           ),
         ),
       )
     );
   }
-
 }
+
+Future<Position> getCurrentLocation() async {
+  Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high);
+
+  return position;
+}
+
+FloatingActionButton(
+onPressed: () async {
+var gps = await getCurrentLocation();
+
+_controller.animateCamera(
+CameraUpdate.newLatLng(LatLng(gps.latitude, gps.longitude)));
+
+},
+child: Icon(
+Icons.my_location,
+color: Colors.black,
+),
+backgroundColor: Colors.white,
+),
