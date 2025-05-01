@@ -21,19 +21,19 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
       'imagePath': 'assets/images/image_plogging_sample.jpg',
     },
     {
-      'title': '쓰레기봉투가 가득 찼네요!',
-      'time': '1시간 전',
+      'title': '서울 플로깅 모임',
+      'time': '1일 전',
       'region': '서울',
-      'likes': 20,
-      'comments': 3,
+      'likes': 35,
+      'comments': 8,
       'imagePath': 'assets/images/image_plogging_sample.jpg',
     },
     {
-      'title': '부산 해변 플로깅 후기',
-      'time': '2일 전',
+      'title': '4월 플로깅 챌린지 완료',
+      'time': '3일 전',
       'region': '부산',
-      'likes': 30,
-      'comments': 5,
+      'likes': 50,
+      'comments': 10,
       'imagePath': 'assets/images/image_plogging_sample.jpg',
     },
   ];
@@ -57,7 +57,19 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.people_alt_outlined, color: Colors.black),
+                      SizedBox(width: 8),
+                      Text(
+                        '지역 커뮤니티',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: TextField(
@@ -82,11 +94,11 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
                 const SizedBox(height: 16),
                 Expanded(
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: filteredPosts.length,
                     itemBuilder: (context, index) {
                       final post = filteredPosts[index];
-                      return buildCommunityPost(
+                      return _buildCommunityPost(
                         title: post['title'],
                         time: post['time'],
                         region: post['region'],
@@ -105,7 +117,7 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
     );
   }
 
-  Widget buildCommunityPost({
+  Widget _buildCommunityPost({
     required String title,
     required String time,
     required String region,
@@ -137,7 +149,10 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Row(

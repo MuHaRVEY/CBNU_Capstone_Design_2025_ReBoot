@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'my_page.dart';
+import 'community_entire.dart';
 
 class HomePage extends StatelessWidget {
   final String userName;
@@ -10,18 +12,10 @@ class HomePage extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-          // 배경 이미지 1 (가장 아래)
+          // ✅ 전체 배경 이미지
           Positioned.fill(
             child: Image.asset(
               'assets/images/image_firstpage_login.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-
-          // 배경 이미지 2 (반투명 덮개 또는 UI 장식)
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/image_app_homepage.png',
               fit: BoxFit.cover,
             ),
           ),
@@ -40,19 +34,30 @@ class HomePage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
+
+                // ✅ 캐릭터 이미지 중앙 배치
                 Expanded(
                   child: Center(
                     child: Image.asset(
-                      'assets/images/character_walk.png', // 반드시 추가된 이미지일 것
-                      height: 200,
+                      'assets/images/image_app_homepage.png',
+                      width: 220,
+                      fit: BoxFit.contain,
                     ),
                   ),
                 ),
+
+                // 버튼들
                 Column(
                   children: [
                     ElevatedButton.icon(
                       onPressed: () {
                         // 커뮤니티 이동
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CommunityEntirePage(),
+                          ),
+                        );
                       },
                       icon: const Icon(Icons.chat_bubble_outline),
                       label: const Text('커뮤니티'),

@@ -61,6 +61,18 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
             child: Column(
               children: [
                 Padding(
+                  padding: const EdgeInsets.only(left: 8.0, top: 8.0),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ),
+                ),
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     children: const [
