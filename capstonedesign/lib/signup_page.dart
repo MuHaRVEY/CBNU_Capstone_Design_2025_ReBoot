@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_database/firebase_database.dart'; // ✅ Realtime Database import
+import 'package:firebase_database/firebase_database.dart';
 import 'signup_confirm_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // Firebase 초기화
+  await Firebase.initializeApp();
   runApp(MaterialApp(home: SignupPage()));
 }
 
@@ -24,7 +24,15 @@ class _SignupPageState extends State<SignupPage> {
   bool _obscurePassword1 = true;
   bool _obscurePassword2 = true;
 
-  // ✅ Realtime Database 저장 함수
+  bool _isNicknameValid = false;
+  bool _isUserIdValid = false;
+  bool _isEmailValid = false;
+  bool _isPasswordMatch = false;
+  String _emailPreviewText = '올바른 이메일 형식이 아닙니다.';
+
+  final emailRegExp = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+
   Future<void> saveUserInfo({
     required String nickname,
     required String userId,
@@ -70,6 +78,11 @@ class _SignupPageState extends State<SignupPage> {
                   SizedBox(height: 20),
                   TextField(
                     controller: _nicknameController,
+                    onChanged: (val) {
+                      setState(() {
+                        _isNicknameValid = val.trim().length >= 2;
+                      });
+                    },
                     decoration: InputDecoration(
                       hintText: '닉네임을 입력해주세요',
                       border: OutlineInputBorder(),
@@ -78,10 +91,18 @@ class _SignupPageState extends State<SignupPage> {
                     ),
                   ),
                   SizedBox(height: 4),
-                  Text('이미 있는 닉네임입니다.', style: TextStyle(color: Colors.red)),
+                  Text(
+                    _isNicknameValid ? '사용 가능한 닉네임입니다.' : '이미 있는 닉네임입니다.',
+                    style: TextStyle(color: _isNicknameValid ? Colors.green : Colors.red),
+                  ),
                   SizedBox(height: 16),
                   TextField(
                     controller: _userIdController,
+                    onChanged: (val) {
+                      setState(() {
+                        _isUserIdValid = val.trim().length >= 4;
+                      });
+                    },
                     decoration: InputDecoration(
                       hintText: '아이디를 입력해주세요',
                       border: OutlineInputBorder(),
@@ -103,11 +124,19 @@ class _SignupPageState extends State<SignupPage> {
                     ),
                   ),
                   SizedBox(height: 4),
-                  Text('이미 있는 아이디입니다.', style: TextStyle(color: Colors.red)),
+                  Text(
+                    _isUserIdValid ? '사용 가능한 아이디입니다.' : '이미 있는 아이디입니다.',
+                    style: TextStyle(color: _isUserIdValid ? Colors.green : Colors.red),
+                  ),
                   SizedBox(height: 16),
                   TextField(
                     controller: _passwordController,
                     obscureText: _obscurePassword1,
+                    onChanged: (val) {
+                      setState(() {
+                        _isPasswordMatch = val == _confirmPasswordController.text;
+                      });
+                    },
                     decoration: InputDecoration(
                       hintText: '비밀번호를 입력해주세요',
                       border: OutlineInputBorder(),
@@ -134,6 +163,11 @@ class _SignupPageState extends State<SignupPage> {
                   TextField(
                     controller: _confirmPasswordController,
                     obscureText: _obscurePassword2,
+                    onChanged: (val) {
+                      setState(() {
+                        _isPasswordMatch = val == _passwordController.text;
+                      });
+                    },
                     decoration: InputDecoration(
                       hintText: '비밀번호를 한 번 더 입력해주세요',
                       border: OutlineInputBorder(),
@@ -152,10 +186,19 @@ class _SignupPageState extends State<SignupPage> {
                     ),
                   ),
                   SizedBox(height: 4),
-                  Text('비밀번호가 일치하지 않습니다.', style: TextStyle(color: Colors.red)),
+                  Text(
+                    _isPasswordMatch ? '비밀번호가 일치합니다.' : '비밀번호가 일치하지 않습니다.',
+                    style: TextStyle(color: _isPasswordMatch ? Colors.green : Colors.red),
+                  ),
                   SizedBox(height: 16),
                   TextField(
                     controller: _emailController,
+                    onChanged: (val) {
+                      setState(() {
+                        _isEmailValid = emailRegExp.hasMatch(val.trim());
+                        _emailPreviewText = _isEmailValid ? '올바른 이메일 형식입니다.' : '올바른 이메일 형식이 아닙니다.';
+                      });
+                    },
                     decoration: InputDecoration(
                       hintText: '이메일을 입력해주세요',
                       border: OutlineInputBorder(),
@@ -164,7 +207,10 @@ class _SignupPageState extends State<SignupPage> {
                     ),
                   ),
                   SizedBox(height: 4),
-                  Text('올바른 이메일 형식이 아닙니다.', style: TextStyle(color: Colors.red)),
+                  Text(
+                    _emailPreviewText,
+                    style: TextStyle(color: _isEmailValid ? Colors.green : Colors.red),
+                  ),
                   SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
