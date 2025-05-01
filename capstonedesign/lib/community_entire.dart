@@ -1,27 +1,65 @@
 import 'package:flutter/material.dart';
+import 'community_popular.dart';
+import 'community_region.dart';
 
-class CommunityEntirePage extends StatelessWidget {
+class CommunityEntirePage extends StatefulWidget {
   const CommunityEntirePage({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    final tabs = ['전체', '인기', '지역', '챌린지'];
+  State<CommunityEntirePage> createState() => _CommunityEntirePageState();
+}
 
+class _CommunityEntirePageState extends State<CommunityEntirePage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final tabs = ['전체', '인기', '지역', '챌린지'];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: tabs.length, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      if (_tabController.index == 1) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CommunityPopularPage(),
+          ),
+        );
+        _tabController.index = 0;
+      } else if (_tabController.index == 2) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CommunityRegionPage(),
+          ),
+        );
+        _tabController.index = 0;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // ✅ 전체 배경 이미지
           Positioned.fill(
             child: Image.asset(
               'assets/images/image_firstpage_login.png',
               fit: BoxFit.cover,
             ),
           ),
-
           SafeArea(
             child: Column(
               children: [
-                // 상단 제목
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
@@ -35,22 +73,16 @@ class CommunityEntirePage extends StatelessWidget {
                     ],
                   ),
                 ),
-
-                // 탭 메뉴
                 Container(
                   color: Colors.white.withOpacity(0.9),
-                  child: DefaultTabController(
-                    length: tabs.length,
-                    child: TabBar(
-                      labelColor: Colors.black,
-                      unselectedLabelColor: Colors.grey,
-                      indicatorColor: Colors.green,
-                      tabs: tabs.map((label) => Tab(text: label)).toList(),
-                    ),
+                  child: TabBar(
+                    controller: _tabController,
+                    labelColor: Colors.black,
+                    unselectedLabelColor: Colors.grey,
+                    indicatorColor: Colors.green,
+                    tabs: tabs.map((label) => Tab(text: label)).toList(),
                   ),
                 ),
-
-                // 게시물 리스트
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.all(16),
@@ -58,6 +90,7 @@ class CommunityEntirePage extends StatelessWidget {
                       buildCommunityPost(
                         title: '공원 플로깅 다녀왔어요.',
                         time: '10분 전',
+                        region: '서울',
                         likes: 12,
                         comments: 4,
                         imagePath: 'assets/images/image_plogging_sample.jpg',
@@ -65,6 +98,7 @@ class CommunityEntirePage extends StatelessWidget {
                       buildCommunityPost(
                         title: '쓰레기봉투가 가득 찼네요!',
                         time: '1시간 전',
+                        region: '서울',
                         likes: 20,
                         comments: 3,
                         imagePath: 'assets/images/image_plogging_sample.jpg',
@@ -72,6 +106,7 @@ class CommunityEntirePage extends StatelessWidget {
                       buildCommunityPost(
                         title: '서울 플로깅 모임',
                         time: '1일 전',
+                        region: '서울',
                         likes: 35,
                         comments: 8,
                         imagePath: 'assets/images/image_plogging_sample.jpg',
@@ -79,6 +114,7 @@ class CommunityEntirePage extends StatelessWidget {
                       buildCommunityPost(
                         title: '4월 플로깅 챌린지 완료',
                         time: '3일 전',
+                        region: '부산',
                         likes: 50,
                         comments: 10,
                         imagePath: 'assets/images/image_plogging_sample.jpg',
@@ -94,10 +130,10 @@ class CommunityEntirePage extends StatelessWidget {
     );
   }
 
-  /// ✅ 커뮤니티 게시물 카드 위젯
   Widget buildCommunityPost({
     required String title,
     required String time,
+    required String region,
     required int likes,
     required int comments,
     required String imagePath,
@@ -111,19 +147,15 @@ class CommunityEntirePage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 상단 영역: 아바타 + 제목/시간/좋아요
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 사람 아이콘 (또는 프로필)
                 CircleAvatar(
                   radius: 20,
                   backgroundColor: Colors.green.shade300,
                   child: const Icon(Icons.person, color: Colors.white),
                 ),
                 const SizedBox(width: 12),
-
-                // 제목 + 시간 + 하트/댓글
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,7 +170,8 @@ class CommunityEntirePage extends StatelessWidget {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Text(time, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                          Text('$time · $region',
+                              style: const TextStyle(color: Colors.grey, fontSize: 12)),
                           const Spacer(),
                           Icon(Icons.favorite, size: 14, color: Colors.red.shade400),
                           const SizedBox(width: 4),
@@ -154,10 +187,7 @@ class CommunityEntirePage extends StatelessWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 10),
-
-            // 하단 이미지
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.asset(
