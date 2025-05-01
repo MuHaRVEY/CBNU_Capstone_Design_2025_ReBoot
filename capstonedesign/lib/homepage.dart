@@ -102,6 +102,19 @@ class HomePage extends StatelessWidget {
         backgroundColor: Colors.green.shade700,
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white70,
+        currentIndex: 1,
+        onTap: (index) {
+          if (index == 2) {
+            // 설정 아이콘 클릭 시
+            showModalBottomSheet(
+              context: context,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              builder: (context) => _buildSettingsSheet(context),
+            );
+          }
+        },
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.sports_esports),
@@ -117,6 +130,42 @@ class HomePage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  // ✅ 설정 모달 바텀시트
+  Widget _buildSettingsSheet(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListTile(
+          leading: Icon(Icons.person),
+          title: Text('마이페이지'),
+          onTap: () {
+            Navigator.pop(context); // 모달 닫기
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => MyPage()), // MyPage로 이동
+            );
+          },
+        ),
+        ListTile(
+          leading: Icon(Icons.notifications),
+          title: Text('알림'),
+          onTap: () {
+            Navigator.pop(context);
+            // 알림 페이지로 이동 (추후 구현)
+          },
+        ),
+        ListTile(
+          leading: Icon(Icons.logout),
+          title: Text('로그아웃'),
+          onTap: () {
+            Navigator.pop(context);
+            // 로그아웃 처리 (추후 구현)
+          },
+        ),
+      ],
     );
   }
 }
