@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'community_popular.dart';
 import 'community_region.dart';
+import 'community_newthings.dart';
 
 class CommunityEntirePage extends StatefulWidget {
   const CommunityEntirePage({Key? key}) : super(key: key);
@@ -96,48 +98,56 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                   ),
                 ),
                 Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      buildCommunityPost(
-                        title: '공원 플로깅 다녀왔어요.',
-                        time: '10분 전',
-                        region: '서울',
-                        likes: 12,
-                        comments: 4,
-                        imagePath: 'assets/images/image_plogging_sample.jpg',
-                      ),
-                      buildCommunityPost(
-                        title: '쓰레기봉투가 가득 찼네요!',
-                        time: '1시간 전',
-                        region: '서울',
-                        likes: 20,
-                        comments: 3,
-                        imagePath: 'assets/images/image_plogging_sample.jpg',
-                      ),
-                      buildCommunityPost(
-                        title: '서울 플로깅 모임',
-                        time: '1일 전',
-                        region: '서울',
-                        likes: 35,
-                        comments: 8,
-                        imagePath: 'assets/images/image_plogging_sample.jpg',
-                      ),
-                      buildCommunityPost(
-                        title: '4월 플로깅 챌린지 완료',
-                        time: '3일 전',
-                        region: '부산',
-                        likes: 50,
-                        comments: 10,
-                        imagePath: 'assets/images/image_plogging_sample.jpg',
-                      ),
-                    ],
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('community_posts')
+                        .orderBy('time', descending: true)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Center(child: CircularProgressIndicator());
+                      }
+
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return Center(child: Text('게시물이 없습니다.'));
+                      }
+
+                      final posts = snapshot.data!.docs;
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: posts.length,
+                        itemBuilder: (context, index) {
+                          final post = posts[index];
+                          return buildCommunityPost(
+                            title: post['title'],
+                            time: '방금 전',
+                            region: post['region'],
+                            likes: post['likes'],
+                            comments: post['comments'],
+                            imagePath: post['imagePath'],
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.green.shade600,
+        child: const Icon(Icons.add),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CommunityNewThingsPage(),
+            ),
+          );
+        },
       ),
     );
   }
