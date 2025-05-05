@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:capstonedesign/tmap_api.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as LAC;
@@ -13,6 +14,14 @@ class MapStateTest extends StatefulWidget{
 
 class _MapStateTest extends State<MapStateTest>{
   late GoogleMapController mapController;
+
+  var tmapapi = TmapApi();
+
+  List<TmapJson>? data;
+
+  void first()async{
+    data = await tmapapi.getJsonData();
+  }
 
   final LatLng _center = const LatLng(37.56520450, 126.98702028);
 
@@ -29,6 +38,7 @@ class _MapStateTest extends State<MapStateTest>{
       markers.add(Marker(position: cordinate, markerId: MarkerId(id.toString())));
     });
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -78,9 +88,11 @@ class _MapStateTest extends State<MapStateTest>{
                 color: Colors.black,
               ),
             ),
-              ],
+              TextButton(onPressed: () => setState(() {
+                first;
+              }), child: Text("json"))],
               ),
-          ],
+          Text(data==null ? "test": data![0].type)],
         )
 
       )
