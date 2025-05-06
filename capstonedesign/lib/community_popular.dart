@@ -1,144 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class CommunityPopularPage extends StatelessWidget {
   const CommunityPopularPage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final tabs = ['전체', '인기', '지역', '챌린지'];
+    return StreamBuilder<DatabaseEvent>(
+      stream: FirebaseDatabase.instance.ref('community_posts').onValue,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+          return const Center(child: Text('게시물이 없습니다.'));
+        }
 
-    return DefaultTabController(
-      length: tabs.length,
-      child: Scaffold(
-        body: Stack(
-          children: [
-            Positioned.fill(
-              child: Image.asset(
-                'assets/images/image_firstpage_login.png',
-                fit: BoxFit.cover,
-              ),
-            ),
-            SafeArea(
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.people_alt_outlined, color: Colors.black),
-                        SizedBox(width: 8),
-                        Text(
-                          '커뮤니티',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    color: Colors.white.withOpacity(0.9),
-                    child: TabBar(
-                      labelColor: Colors.black,
-                      unselectedLabelColor: Colors.grey,
-                      indicatorColor: Colors.green,
-                      tabs: tabs.map((label) => Tab(text: label)).toList(),
-                    ),
-                  ),
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        _buildEntireTab(),
-                        _buildPopularTab(),
-                        _buildPlaceholderTab('지역 게시물 준비 중'),
-                        _buildPlaceholderTab('챌린지 게시물 준비 중'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+        final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+        final posts = data.entries.map((e) => e.value as Map).toList();
+        posts.sort((a, b) => (b['likes'] ?? 0).compareTo(a['likes'] ?? 0));
 
-  Widget _buildEntireTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _buildCommunityPost(
-          title: '공원 플로깅 다녀왔어요.',
-          time: '10분 전',
-          region: '서울',
-          likes: 12,
-          comments: 4,
-          imagePath: 'assets/images/image_plogging_sample.jpg',
-        ),
-        _buildCommunityPost(
-          title: '서울 플로깅 모임',
-          time: '1일 전',
-          region: '서울',
-          likes: 35,
-          comments: 8,
-          imagePath: 'assets/images/image_plogging_sample.jpg',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPopularTab() {
-    final List<Map<String, dynamic>> posts = [
-      {
-        'title': '공원 플로깅 다녀왔어요.',
-        'time': '10분 전',
-        'region': '서울',
-        'likes': 12,
-        'comments': 4,
-        'imagePath': 'assets/images/image_plogging_sample.jpg',
-      },
-      {
-        'title': '서울 플로깅 모임',
-        'time': '1일 전',
-        'region': '서울',
-        'likes': 35,
-        'comments': 8,
-        'imagePath': 'assets/images/image_plogging_sample.jpg',
-      },
-      {
-        'title': '4월 플로깅 챌린지 완료',
-        'time': '3일 전',
-        'region': '부산',
-        'likes': 50,
-        'comments': 10,
-        'imagePath': 'assets/images/image_plogging_sample.jpg',
-      },
-    ];
-
-    posts.sort((a, b) => b['likes'].compareTo(a['likes']));
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: posts.length,
-      itemBuilder: (context, index) {
-        final post = posts[index];
-        return _buildCommunityPost(
-          title: post['title'],
-          time: post['time'],
-          region: post['region'],
-          likes: post['likes'],
-          comments: post['comments'],
-          imagePath: post['imagePath'],
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: posts.length,
+          itemBuilder: (context, index) {
+            final post = posts[index];
+            return _buildCommunityPost(
+              title: post['title'] ?? '',
+              time: post['time'] ?? '',
+              region: post['region'] ?? '',
+              likes: post['likes'] ?? 0,
+              comments: post['comments'] ?? 0,
+              imagePath: post['imagePath'] ?? '',
+            );
+          },
         );
       },
-    );
-  }
-
-  Widget _buildPlaceholderTab(String message) {
-    return Center(
-      child: Text(
-        message,
-        style: const TextStyle(fontSize: 16, color: Colors.black54),
-      ),
     );
   }
 
@@ -202,10 +96,9 @@ class CommunityPopularPage extends StatelessWidget {
             const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                imagePath,
-                fit: BoxFit.cover,
-              ),
+              child: imagePath.isNotEmpty
+                  ? Image.asset(imagePath, fit: BoxFit.cover)
+                  : const SizedBox.shrink(),
             ),
           ],
         ),

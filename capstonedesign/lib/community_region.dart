@@ -1,4 +1,6 @@
+// ✅ Firebase 연동된 단순 위젯 region 탭 community_region.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class CommunityRegionPage extends StatefulWidget {
   const CommunityRegionPage({Key? key}) : super(key: key);
@@ -11,109 +13,73 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchText = '';
 
-  final List<Map<String, dynamic>> allPosts = [
-    {
-      'title': '공원 플로깅 다녀왔어요.',
-      'time': '10분 전',
-      'region': '서울',
-      'likes': 12,
-      'comments': 4,
-      'imagePath': 'assets/images/image_plogging_sample.jpg',
-    },
-    {
-      'title': '서울 플로깅 모임',
-      'time': '1일 전',
-      'region': '서울',
-      'likes': 35,
-      'comments': 8,
-      'imagePath': 'assets/images/image_plogging_sample.jpg',
-    },
-    {
-      'title': '4월 플로깅 챌린지 완료',
-      'time': '3일 전',
-      'region': '부산',
-      'likes': 50,
-      'comments': 10,
-      'imagePath': 'assets/images/image_plogging_sample.jpg',
-    },
-  ];
+  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('community_posts');
 
   @override
   Widget build(BuildContext context) {
-    final filteredPosts = allPosts
-        .where((post) =>
-        post['region'].toString().toLowerCase().contains(_searchText.toLowerCase()))
-        .toList();
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: '지역을 검색하세요',
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.9),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            onChanged: (value) {
+              setState(() {
+                _searchText = value;
+              });
+            },
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<DatabaseEvent>(
+            stream: _dbRef.onValue,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+                return const Center(child: Text('게시물이 없습니다.'));
+              }
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/image_firstpage_login.png',
-              fit: BoxFit.cover,
-            ),
+              final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+              final filteredPosts = data.entries.where((entry) {
+                final post = entry.value as Map;
+                return post['region']
+                    ?.toString()
+                    .toLowerCase()
+                    .contains(_searchText.toLowerCase()) ??
+                    false;
+              }).toList();
+
+              filteredPosts.sort((a, b) =>
+              b.value['time']?.toString().compareTo(a.value['time']?.toString() ?? '') ?? 0);
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: filteredPosts.length,
+                itemBuilder: (context, index) {
+                  final post = filteredPosts[index].value;
+                  return _buildCommunityPost(
+                    title: post['title'] ?? '',
+                    time: post['time'] ?? '',
+                    region: post['region'] ?? '',
+                    likes: post['likes'] ?? 0,
+                    comments: post['comments'] ?? 0,
+                    imagePath: post['imagePath'] ?? '',
+                  );
+                },
+              );
+            },
           ),
-          SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: const [
-                      Icon(Icons.people_alt_outlined, color: Colors.black),
-                      SizedBox(width: 8),
-                      Text(
-                        '지역 커뮤니티',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: '지역을 검색하세요',
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.9),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: (value) {
-                      setState(() {
-                        _searchText = value;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredPosts.length,
-                    itemBuilder: (context, index) {
-                      final post = filteredPosts[index];
-                      return _buildCommunityPost(
-                        title: post['title'],
-                        time: post['time'],
-                        region: post['region'],
-                        likes: post['likes'],
-                        comments: post['comments'],
-                        imagePath: post['imagePath'],
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -177,10 +143,9 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
             const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                imagePath,
-                fit: BoxFit.cover,
-              ),
+              child: imagePath.isNotEmpty
+                  ? Image.asset(imagePath, fit: BoxFit.cover)
+                  : const SizedBox.shrink(),
             ),
           ],
         ),

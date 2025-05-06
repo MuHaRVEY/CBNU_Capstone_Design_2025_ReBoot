@@ -1,5 +1,8 @@
+// ✅ 통합 탭 처리 community_entire.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'community_popular.dart';
 import 'community_region.dart';
 import 'community_newthings.dart';
@@ -16,30 +19,26 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
   late TabController _tabController;
   final tabs = ['전체', '인기', '지역', '챌린지'];
 
+  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('community_posts');
+  String nickname = '';
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: tabs.length, vsync: this);
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) return;
-      if (_tabController.index == 1) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const CommunityPopularPage(),
-          ),
-        );
-        _tabController.index = 0;
-      } else if (_tabController.index == 2) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const CommunityRegionPage(),
-          ),
-        );
-        _tabController.index = 0;
+    _loadNickname();
+  }
+
+  Future<void> _loadNickname() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      final snapshot = await FirebaseDatabase.instance.ref('users/$uid/nickname').get();
+      if (snapshot.exists) {
+        setState(() {
+          nickname = snapshot.value.toString();
+        });
       }
-    });
+    }
   }
 
   @override
@@ -63,17 +62,20 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(left: 8.0, top: 8.0),
+                  padding: const EdgeInsets.only(left: 16.0, top: 16.0),
                   child: Align(
-                    alignment: Alignment.topLeft,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      nickname.isNotEmpty ? '$nickname님 안녕하세요 👋' : '',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
                     ),
                   ),
                 ),
+                const SizedBox(height: 8),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
@@ -98,38 +100,14 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                   ),
                 ),
                 Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('community_posts')
-                        .orderBy('time', descending: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(child: CircularProgressIndicator());
-                      }
-
-                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                        return Center(child: Text('게시물이 없습니다.'));
-                      }
-
-                      final posts = snapshot.data!.docs;
-
-                      return ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: posts.length,
-                        itemBuilder: (context, index) {
-                          final post = posts[index];
-                          return buildCommunityPost(
-                            title: post['title'],
-                            time: '방금 전',
-                            region: post['region'],
-                            likes: post['likes'],
-                            comments: post['comments'],
-                            imagePath: post['imagePath'],
-                          );
-                        },
-                      );
-                    },
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildEntireTab(),
+                      const CommunityPopularPage(),
+                      const CommunityRegionPage(),
+                      _buildPlaceholderTab('챌린지 게시물 준비 중'),
+                    ],
                   ),
                 ),
               ],
@@ -143,16 +121,59 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => CommunityNewThingsPage(),
-            ),
+            MaterialPageRoute(builder: (context) => const CommunityNewThingsPage()),
           );
         },
       ),
     );
   }
 
+  Widget _buildEntireTab() {
+    return StreamBuilder<DatabaseEvent>(
+      stream: _dbRef.onValue,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+          return const Center(child: Text('게시물이 없습니다.'));
+        }
+
+        final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+        final posts = data.entries.toList().reversed.toList();
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: posts.length,
+          itemBuilder: (context, index) {
+            final post = posts[index].value;
+            return buildCommunityPost(
+              username: post['username'] ?? '익명',
+              title: post['title'] ?? '제목 없음',
+              time: post['time']?.toString() ?? '',
+              region: post['region'] ?? '',
+              likes: post['likes'] ?? 0,
+              comments: post['comments'] ?? 0,
+              imagePath: post['imagePath'] ?? '',
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPlaceholderTab(String message) {
+    return Center(
+      child: Text(
+        message,
+        style: const TextStyle(fontSize: 16, color: Colors.black54),
+      ),
+    );
+  }
+
   Widget buildCommunityPost({
+    required String username,
     required String title,
     required String time,
     required String region,
@@ -184,15 +205,12 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Text('$time · $region',
+                          Text('$username · $time · $region',
                               style: const TextStyle(color: Colors.grey, fontSize: 12)),
                           const Spacer(),
                           Icon(Icons.favorite, size: 14, color: Colors.red.shade400),
@@ -203,7 +221,7 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                           const SizedBox(width: 4),
                           Text('$comments', style: const TextStyle(fontSize: 12)),
                         ],
-                      )
+                      ),
                     ],
                   ),
                 ),
@@ -212,10 +230,9 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
             const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                imagePath,
-                fit: BoxFit.cover,
-              ),
+              child: imagePath.isNotEmpty
+                  ? Image.asset(imagePath, fit: BoxFit.cover)
+                  : const SizedBox.shrink(),
             ),
           ],
         ),
