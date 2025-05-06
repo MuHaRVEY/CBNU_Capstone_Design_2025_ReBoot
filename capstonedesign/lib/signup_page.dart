@@ -26,12 +26,10 @@ class _SignupPageState extends State<SignupPage> {
 
   bool _isNicknameValid = false;
   bool _isUserIdValid = false;
-  bool _isEmailValid = false;
+  bool _isUserIdChecked = false;
+  bool _isEmailValid = true;
   bool _isPasswordMatch = false;
-  String _emailPreviewText = '올바른 이메일 형식이 아닙니다.';
-
-  final emailRegExp = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-
+  String _emailPreviewText = '';
 
   Future<void> saveUserInfo({
     required String nickname,
@@ -39,15 +37,19 @@ class _SignupPageState extends State<SignupPage> {
     required String password,
     required String email,
   }) async {
-    final databaseRef = FirebaseDatabase.instance.ref();
-
-    await databaseRef.child("users").push().set({
+    final ref = FirebaseDatabase.instance.ref("users/$userId");
+    await ref.set({
       'nickname': nickname,
       'userId': userId,
       'password': password,
       'email': email,
       'createdAt': DateTime.now().toIso8601String(),
     });
+  }
+
+  Future<bool> isUserIdTaken(String userId) async {
+    final snapshot = await FirebaseDatabase.instance.ref("users/$userId").get();
+    return snapshot.exists;
   }
 
   @override
@@ -71,147 +73,101 @@ class _SignupPageState extends State<SignupPage> {
                     onPressed: () => Navigator.pop(context),
                   ),
                   SizedBox(height: 10),
-                  Text(
-                    '회원가입',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
+                  Text('회원가입', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   SizedBox(height: 20),
-                  TextField(
+
+                  _buildTextField(
                     controller: _nicknameController,
+                    hint: '닉네임을 입력해주세요',
                     onChanged: (val) {
-                      setState(() {
-                        _isNicknameValid = val.trim().length >= 2;
-                      });
+                      setState(() => _isNicknameValid = val.trim().length >= 2);
                     },
-                    decoration: InputDecoration(
-                      hintText: '닉네임을 입력해주세요',
-                      border: OutlineInputBorder(),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.85),
-                    ),
+                    helperText: !_isNicknameValid ? '닉네임은 2자 이상이어야 합니다.' : '',
+                    helperColor: Colors.red,
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    _isNicknameValid ? '사용 가능한 닉네임입니다.' : '이미 있는 닉네임입니다.',
-                    style: TextStyle(color: _isNicknameValid ? Colors.green : Colors.red),
-                  ),
+
                   SizedBox(height: 16),
-                  TextField(
-                    controller: _userIdController,
-                    onChanged: (val) {
-                      setState(() {
-                        _isUserIdValid = val.trim().length >= 4;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: '아이디를 입력해주세요',
-                      border: OutlineInputBorder(),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.85),
-                      suffix: TextButton(
-                        onPressed: () {
-                          // 중복 확인 로직
-                        },
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          minimumSize: Size(0, 36),
-                        ),
-                        child: Text(
-                          '중복 확인',
-                          style: TextStyle(fontSize: 12, color: Colors.green),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    _isUserIdValid ? '사용 가능한 아이디입니다.' : '이미 있는 아이디입니다.',
-                    style: TextStyle(color: _isUserIdValid ? Colors.green : Colors.red),
-                  ),
-                  SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword1,
-                    onChanged: (val) {
-                      setState(() {
-                        _isPasswordMatch = val == _confirmPasswordController.text;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: '비밀번호를 입력해주세요',
-                      border: OutlineInputBorder(),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.85),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword1 ? Icons.visibility_off : Icons.visibility,
-                        ),
-                        onPressed: () {
+
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: _userIdController,
+                        onChanged: (val) {
                           setState(() {
-                            _obscurePassword1 = !_obscurePassword1;
+                            _isUserIdChecked = false;
+                            _isUserIdValid = val.trim().length >= 4;
                           });
                         },
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    '영문, 숫자 포함 8자 이상 20자 이하로 입력해주세요.',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  SizedBox(height: 16),
-                  TextField(
-                    controller: _confirmPasswordController,
-                    obscureText: _obscurePassword2,
-                    onChanged: (val) {
-                      setState(() {
-                        _isPasswordMatch = val == _passwordController.text;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: '비밀번호를 한 번 더 입력해주세요',
-                      border: OutlineInputBorder(),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.85),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword2 ? Icons.visibility_off : Icons.visibility,
+                        decoration: InputDecoration(
+                          hintText: '아이디를 입력해주세요',
+                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.85),
+                          suffixIcon: TextButton(
+                            onPressed: () async {
+                              final userId = _userIdController.text.trim();
+                              if (userId.isEmpty || !_isUserIdValid) return;
+                              final exists = await isUserIdTaken(userId);
+                              setState(() {
+                                _isUserIdChecked = true;
+                                _isUserIdValid = !exists;
+                              });
+                            },
+                            child: Text('중복 확인', style: TextStyle(fontSize: 12, color: Colors.green)),
+                          ),
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword2 = !_obscurePassword2;
-                          });
-                        },
                       ),
-                    ),
+                      SizedBox(height: 4),
+                      if (_isUserIdChecked)
+                        Text(
+                          _isUserIdValid ? '사용 가능한 아이디입니다.' : '이미 사용 중인 아이디입니다.',
+                          style: TextStyle(color: _isUserIdValid ? Colors.green : Colors.red),
+                        ),
+                    ],
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    _isPasswordMatch ? '비밀번호가 일치합니다.' : '비밀번호가 일치하지 않습니다.',
-                    style: TextStyle(color: _isPasswordMatch ? Colors.green : Colors.red),
-                  ),
+
                   SizedBox(height: 16),
-                  TextField(
+
+                  _buildPasswordField(_passwordController, _obscurePassword1, (val) {
+                    setState(() => _isPasswordMatch = val == _confirmPasswordController.text);
+                  }, () {
+                    setState(() => _obscurePassword1 = !_obscurePassword1);
+                  }, '비밀번호를 입력해주세요'),
+
+                  SizedBox(height: 16),
+
+                  _buildPasswordField(_confirmPasswordController, _obscurePassword2, (val) {
+                    setState(() => _isPasswordMatch = val == _passwordController.text);
+                  }, () {
+                    setState(() => _obscurePassword2 = !_obscurePassword2);
+                  }, '비밀번호를 한 번 더 입력해주세요'),
+
+                  SizedBox(height: 4),
+
+                  if (_confirmPasswordController.text.isNotEmpty)
+                    Text(
+                      _isPasswordMatch ? '비밀번호가 일치합니다.' : '비밀번호가 일치하지 않습니다.',
+                      style: TextStyle(color: _isPasswordMatch ? Colors.green : Colors.red),
+                    ),
+
+                  SizedBox(height: 16),
+
+                  _buildTextField(
                     controller: _emailController,
+                    hint: '이메일을 입력해주세요',
                     onChanged: (val) {
                       setState(() {
-                        _isEmailValid = emailRegExp.hasMatch(val.trim());
-                        _emailPreviewText = _isEmailValid ? '올바른 이메일 형식입니다.' : '올바른 이메일 형식이 아닙니다.';
+                        _isEmailValid = true;
+                        _emailPreviewText = '';
                       });
                     },
-                    decoration: InputDecoration(
-                      hintText: '이메일을 입력해주세요',
-                      border: OutlineInputBorder(),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.85),
-                    ),
+                    helperText: _emailPreviewText,
+                    helperColor: Colors.red,
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    _emailPreviewText,
-                    style: TextStyle(color: _isEmailValid ? Colors.green : Colors.red),
-                  ),
+
                   SizedBox(height: 24),
+
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -223,9 +179,9 @@ class _SignupPageState extends State<SignupPage> {
                         final confirmPassword = _confirmPasswordController.text;
                         final email = _emailController.text.trim();
 
-                        if (password != confirmPassword) {
+                        if (!_isNicknameValid || !_isUserIdValid || !_isUserIdChecked || !_isPasswordMatch) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('비밀번호가 일치하지 않습니다.')),
+                            SnackBar(content: Text('입력 정보를 다시 확인해주세요.')),
                           );
                           return;
                         }
@@ -255,12 +211,65 @@ class _SignupPageState extends State<SignupPage> {
                       child: Text('회원가입', style: TextStyle(fontSize: 16)),
                     ),
                   ),
+
                   SizedBox(height: 30),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hint,
+    required Function(String) onChanged,
+    required String helperText,
+    required Color helperColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: controller,
+          onChanged: onChanged,
+          decoration: InputDecoration(
+            hintText: hint,
+            border: OutlineInputBorder(),
+            filled: true,
+            fillColor: Colors.white.withOpacity(0.85),
+          ),
+        ),
+        if (helperText.isNotEmpty) ...[
+          SizedBox(height: 4),
+          Text(helperText, style: TextStyle(color: helperColor)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPasswordField(
+      TextEditingController controller,
+      bool obscureText,
+      Function(String) onChanged,
+      VoidCallback toggleObscure,
+      String hint,
+      ) {
+    return TextField(
+      controller: controller,
+      obscureText: obscureText,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        hintText: hint,
+        border: OutlineInputBorder(),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.85),
+        suffixIcon: IconButton(
+          icon: Icon(obscureText ? Icons.visibility_off : Icons.visibility),
+          onPressed: toggleObscure,
+        ),
       ),
     );
   }
