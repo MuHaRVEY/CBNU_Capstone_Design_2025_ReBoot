@@ -75,7 +75,7 @@ class HomePage extends StatelessWidget {
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
                       onPressed: () {
-                        // 플로깅 이동
+                        // 플로깅 이동 (추후 구현)
                       },
                       icon: const Icon(Icons.map_outlined),
                       label: const Text('플로깅'),
@@ -108,7 +108,7 @@ class HomePage extends StatelessWidget {
             // 설정 아이콘 클릭 시
             showModalBottomSheet(
               context: context,
-              shape: RoundedRectangleBorder(
+              shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               builder: (context) => _buildSettingsSheet(context),
@@ -139,8 +139,8 @@ class HomePage extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         ListTile(
-          leading: Icon(Icons.person),
-          title: Text('마이페이지'),
+          leading: const Icon(Icons.person),
+          title: const Text('마이페이지'),
           onTap: () {
             Navigator.pop(context); // 모달 닫기
             Navigator.push(
@@ -150,16 +150,16 @@ class HomePage extends StatelessWidget {
           },
         ),
         ListTile(
-          leading: Icon(Icons.notifications),
-          title: Text('알림'),
+          leading: const Icon(Icons.notifications),
+          title: const Text('알림'),
           onTap: () {
             Navigator.pop(context);
             // 알림 페이지로 이동 (추후 구현)
           },
         ),
         ListTile(
-          leading: Icon(Icons.logout),
-          title: Text('로그아웃'),
+          leading: const Icon(Icons.logout),
+          title: const Text('로그아웃'),
           onTap: () {
             Navigator.pop(context);
             // 로그아웃 처리 (추후 구현)
