@@ -1,19 +1,48 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-class TmapJson{
+class Geometry {
   final String type;
-  final List<List<double>> coordinate;
-  
+  final List<dynamic> coordinates;
 
-  TmapJson({
+  Geometry({
     required this.type,
-    required this.coordinate
+    required this.coordinates
   });
 
-  TmapJson.fromJson(Map<String, dynamic> json)
-  :type = json["features"],
-  coordinate = json["coordinate"];
+  /* Geometry.fromJson(Map<String, dynamic> json)
+  :type = json["type"],
+  coordinates = json["coordinates"]; */
+
+  factory Geometry.fromJson(Map<String, dynamic> json){
+    return Geometry(type: json["type"], coordinates: json["coordinates"]);
+  }
+}
+
+class Feature{
+  final Geometry geometry;
+
+  Feature({required this.geometry});
+
+  /* Feature.fromJson(Map<String, dynamic> json)
+  :geometry = json["goemetry"]; */
+
+  factory Feature.fromJson(Map<String, dynamic> json){
+    return Feature(geometry: Geometry.fromJson(json["geometry"]));
+  }
+}
+
+class FeatureCollection {
+  final List<Feature> features;
+
+  FeatureCollection({required this.features});
+
+  factory FeatureCollection.fromJson(Map<String, dynamic> json){
+    var list =json["features"] as List;
+    List<Feature>featureList = list.map((e) => Feature.fromJson(e)).toList();
+
+    return FeatureCollection(features: featureList);
+  }
 }
 
 class TmapApi {
@@ -30,14 +59,17 @@ class TmapApi {
 		"endName" : "도착지"
   };
 
-  Future<List<TmapJson>> getJsonData() async{
+  Future<FeatureCollection> getJsonData() async{
     var url = 'https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1&format=json';
+
     var response = await http.post(Uri.parse(url),
     headers: {"appKey":"yoGbsPZDXKaj8PRRQSIuX8AAd1SHGLIp9zw5oVOe"},
     body: data);
-    List<dynamic> _data = json.decode(response.body);
-    List<TmapJson> result = _data.map((e) => TmapJson.fromJson(e)).toList();
-    return result;
+
+    var decode = json.decode(response.body);
+    var featureCollection = FeatureCollection.fromJson(decode);
+
+    return featureCollection;
   }
 }
 

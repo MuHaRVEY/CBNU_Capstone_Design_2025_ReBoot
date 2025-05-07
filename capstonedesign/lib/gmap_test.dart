@@ -1,5 +1,8 @@
 import 'dart:math';
 
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
 import 'package:capstonedesign/tmap_api.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -15,12 +18,15 @@ class MapStateTest extends StatefulWidget{
 class _MapStateTest extends State<MapStateTest>{
   late GoogleMapController mapController;
 
-  var tmapapi = TmapApi();
-
-  List<TmapJson>? data;
-
-  void first()async{
-    data = await tmapapi.getJsonData();
+  
+  FeatureCollection? data;
+  
+  void first() async {
+    var _data = await getJsonData();
+    setState(() {
+      data = _data;
+    });
+    
   }
 
   final LatLng _center = const LatLng(37.56520450, 126.98702028);
@@ -39,6 +45,29 @@ class _MapStateTest extends State<MapStateTest>{
     });
   }
 
+var loc = {
+    "startX" : "126.983937",
+		"startY" : "37.564991",
+		"endX" : "126.988940",
+		"endY" : "37.566158",
+		"reqCoordType" : "WGS84GEO",
+		"resCoordType" : "WGS84GEO",
+		"startName" : "출발지",
+		"endName" : "도착지"
+  };
+
+  Future<FeatureCollection> getJsonData() async{
+    var url = 'https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1&format=json';
+    
+    var response = await http.post(Uri.parse(url),
+    headers: {"appKey":"yoGbsPZDXKaj8PRRQSIuX8AAd1SHGLIp9zw5oVOe"},
+    body: loc);
+
+    var decode = json.decode(response.body);
+    var featureCollection = FeatureCollection.fromJson(decode);
+
+    return featureCollection;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,11 +117,9 @@ class _MapStateTest extends State<MapStateTest>{
                 color: Colors.black,
               ),
             ),
-              TextButton(onPressed: () => setState(() {
-                first;
-              }), child: Text("json"))],
+              TextButton(onPressed: first , child: Text("json"))],
               ),
-          Text(data==null ? "test": data![0].type)],
+          Text(data == null ? "test" : data!.features[0].geometry.type)],
         )
 
       )
