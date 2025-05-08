@@ -1,71 +1,134 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
-class MyPage extends StatelessWidget {
-  // TODO: Firebase에서 사용자 이름을 가져오도록 변경
-  final String name = '김지훈';
+class MyPage extends StatefulWidget {
+  const MyPage({super.key});
 
-  // TODO: Firestore에서 사용자 상태 메시지 받아오기
-  final String statusMessage = '환경을 사랑하는 러너';
+  @override
+  State<MyPage> createState() => _MyPageState();
+}
 
-  final String profileImagePath = 'assets/images/image_firstpage_login.png';
+class _MyPageState extends State<MyPage> {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
 
-  // TODO: 누적 거리, 게시글 수, 챌린지 수도 Firestore에서 불러오기
-  final double totalDistance = 48.3;
-  final int postCount = 87;
-  final int challengeCount = 21;
+  String name = '';
+  String statusMessage = '';
+  double totalDistance = 0.0;
+  int postCount = 0;
+  int challengeCount = 0;
+  List<String> currentChallenges = [];
+  List<String> myPosts = [];
+  List<String> likedPosts = [];
+  String profileImageUrl = '';
 
-  // TODO: 진행 중인 챌린지 - Firestore 리스트로 연동 예정
-  final List<String> currentChallenges = [
-    '성수동 플로깅 챌린지',
-    '중앙로 환경 정화 챌린지',
-    '주말 산책 챌린지',
-  ];
+  final String defaultImagePath = 'assets/images/image_firstpage_login.png';
 
-  // TODO: 내 게시글 리스트도 Firestore에서 받아오기
-  final List<String> myPosts = [
-    '플로깅 후기 공유합니다!',
-    '오늘은 산책만 했어요',
-    '비 오는 날엔 어떻게 하나요?',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
 
-  // TODO: 좋아요한 글도 Firestore에서 받아오기
-  final List<String> likedPosts = [
-    '환경 보호 꿀팁 모음',
-    '이번 주말 챌린지 참여 후기',
-  ];
+  Future<void> _loadUserData() async {
+    if (uid == null) return;
+    final ref = FirebaseDatabase.instance.ref('users/$uid');
+    final snapshot = await ref.get();
+
+    if (snapshot.exists) {
+      final data = snapshot.value as Map;
+
+      setState(() {
+        name = data['nickname'] ?? '';
+        statusMessage = data['statusMessage'] ?? '';
+        totalDistance = (data['totalDistance'] ?? 0).toDouble();
+        postCount = data['postCount'] ?? 0;
+        challengeCount = data['challengeCount'] ?? 0;
+        currentChallenges = List<String>.from(data['currentChallenges'] ?? []);
+        myPosts = List<String>.from(data['myPosts'] ?? []);
+        likedPosts = List<String>.from(data['likedPosts'] ?? []);
+        profileImageUrl = data['profileImageUrl'] ?? '';
+      });
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile == null || uid == null) {
+      print('❌ 이미지 선택 취소 또는 UID 없음');
+      return;
+    }
+
+    final file = File(pickedFile.path);
+    final storageRef = FirebaseStorage.instance.ref('profile_images/$uid.jpg');
+
+    try {
+      print('📤 이미지 업로드 시작...');
+      await storageRef.putFile(file);
+      print('✅ 이미지 업로드 성공');
+
+      final downloadUrl = await storageRef.getDownloadURL();
+      print('✅ 업로드된 URL: $downloadUrl');
+
+      await FirebaseDatabase.instance
+          .ref('users/$uid/profileImageUrl')
+          .set(downloadUrl);
+      print('✅ DB에 URL 저장 완료');
+
+      setState(() {
+        profileImageUrl =
+        '$downloadUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('프로필 이미지가 업데이트되었습니다.')),
+      );
+    } catch (e) {
+      print('❌ 이미지 업로드 실패: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이미지 업로드에 실패했습니다.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('마이페이지'),
+        title: const Text('마이페이지'),
         backgroundColor: Colors.green.shade700,
         foregroundColor: Colors.white,
       ),
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage(profileImagePath),
+            image: AssetImage(defaultImagePath),
             fit: BoxFit.cover,
           ),
         ),
         child: ListView(
-          padding: EdgeInsets.fromLTRB(20, 16, 20, 16),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           children: [
-            SizedBox(height: 40),
+            const SizedBox(height: 40),
             _buildProfileSection(),
-            SizedBox(height: 30),
+            const SizedBox(height: 30),
             _buildStatsSection(),
-            SizedBox(height: 30),
+            const SizedBox(height: 30),
             _buildChallengeDropdown(),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             _buildMyPostsDropdown(),
             _buildLikedPostsDropdown(),
           ],
         ),
       ),
       bottomNavigationBar: Container(
-        padding: EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.8),
         ),
@@ -85,17 +148,26 @@ class MyPage extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: 50,
-          backgroundImage: AssetImage(profileImagePath),
+        GestureDetector(
+          onTap: _pickAndUploadImage,
+          child: CircleAvatar(
+            radius: 50,
+            backgroundImage: profileImageUrl.isNotEmpty
+                ? NetworkImage(profileImageUrl)
+                : AssetImage(defaultImagePath) as ImageProvider,
+          ),
         ),
-        SizedBox(width: 16),
+        const SizedBox(width: 16),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(name, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text(statusMessage, style: TextStyle(fontSize: 16, color: Colors.black87)),
+            Text(name,
+                style:
+                const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(statusMessage,
+                style:
+                const TextStyle(fontSize: 16, color: Colors.black87)),
           ],
         ),
       ],
@@ -118,9 +190,10 @@ class MyPage extends StatelessWidget {
   Widget _buildStat(String value, String unit) {
     return Column(
       children: [
-        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        SizedBox(height: 2),
-        Text(unit, style: TextStyle(fontSize: 12, color: Colors.black87)),
+        Text(value,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 2),
+        Text(unit, style: const TextStyle(fontSize: 12, color: Colors.black87)),
       ],
     );
   }
@@ -134,69 +207,32 @@ class MyPage extends StatelessWidget {
   }
 
   Widget _buildChallengeDropdown() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ExpansionTile(
-        title: Text('진행중인 챌린지', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        children: currentChallenges
-            .map(
-              (challenge) => Container(
-            margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(challenge, style: TextStyle(fontSize: 14)),
-            ),
-          ),
-        )
-            .toList(),
-      ),
-    );
+    return _buildDropdown('진행중인 챌린지', currentChallenges, Icons.flag);
   }
 
   Widget _buildMyPostsDropdown() {
-    return Container(
-      margin: EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ExpansionTile(
-        title: Text('내 게시글 보기', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        children: myPosts
-            .map(
-              (post) => ListTile(
-            title: Text(post, style: TextStyle(fontSize: 14)),
-            leading: Icon(Icons.article_outlined),
-            onTap: () {},
-          ),
-        )
-            .toList(),
-      ),
-    );
+    return _buildDropdown('내 게시글 보기', myPosts, Icons.article_outlined);
   }
 
   Widget _buildLikedPostsDropdown() {
+    return _buildDropdown('좋아요한 글', likedPosts, Icons.favorite_outline);
+  }
+
+  Widget _buildDropdown(String title, List<String> items, IconData icon) {
     return Container(
-      margin: EdgeInsets.only(top: 12),
+      margin: const EdgeInsets.only(top: 12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.85),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ExpansionTile(
-        title: Text('좋아요한 글', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        children: likedPosts
+        title: Text(title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        children: items
             .map(
-              (post) => ListTile(
-            title: Text(post, style: TextStyle(fontSize: 14)),
-            leading: Icon(Icons.favorite_outline),
+              (item) => ListTile(
+            title: Text(item, style: const TextStyle(fontSize: 14)),
+            leading: Icon(icon),
             onTap: () {},
           ),
         )
@@ -212,10 +248,13 @@ class MyPage extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 26),
-          SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(fontSize: 13)),
         ],
       ),
     );
   }
 }
+
+
+
