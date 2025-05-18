@@ -1,7 +1,27 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'first_page.dart';
 
-class SignupConfirmPage extends StatelessWidget {
+class SignupConfirmPage extends StatefulWidget {
   const SignupConfirmPage({Key? key}) : super(key: key);
+
+  @override
+  State<SignupConfirmPage> createState() => _SignupConfirmPageState();
+}
+
+class _SignupConfirmPageState extends State<SignupConfirmPage> {
+  @override
+  void initState() {
+    super.initState();
+    // 3초 후 첫 페이지로 이동
+    Future.delayed(Duration(seconds: 3), () {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => FirstPage()),
+            (route) => false,
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,7 +31,7 @@ class SignupConfirmPage extends StatelessWidget {
           // 배경 이미지
           Positioned.fill(
             child: Image.asset(
-              'assets/images/image_firstpage_login.png', // 이미지 경로 확인 필요
+              'assets/images/image_firstpage_login.png',
               fit: BoxFit.cover,
             ),
           ),
@@ -22,7 +42,7 @@ class SignupConfirmPage extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18.0,
                 fontWeight: FontWeight.w500,
-                color: Colors.black, // 배경에 따라 필요시 색 조정
+                color: Colors.black,
               ),
               textAlign: TextAlign.center,
             ),
