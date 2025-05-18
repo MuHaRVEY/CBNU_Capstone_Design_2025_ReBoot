@@ -3,24 +3,26 @@ import 'my_page.dart';
 import 'community_entire.dart';
 
 class HomePage extends StatelessWidget {
+  final String userId;
   final String userName;
 
-  const HomePage({super.key, this.userName = '??'});
+  const HomePage({
+    super.key,
+    required this.userId,
+    required this.userName,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // ✅ 전체 배경 이미지
           Positioned.fill(
             child: Image.asset(
               'assets/images/image_firstpage_login.png',
               fit: BoxFit.cover,
             ),
           ),
-
-          // 콘텐츠
           SafeArea(
             child: Column(
               children: [
@@ -34,8 +36,6 @@ class HomePage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // ✅ 캐릭터 이미지 중앙 배치
                 Expanded(
                   child: Center(
                     child: Image.asset(
@@ -45,17 +45,17 @@ class HomePage extends StatelessWidget {
                     ),
                   ),
                 ),
-
-                // 버튼들
                 Column(
                   children: [
                     ElevatedButton.icon(
                       onPressed: () {
-                        // 커뮤니티 이동
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const CommunityEntirePage(),
+                            builder: (context) => CommunityEntirePage(
+                              userId: userId,
+                              nickname: userName,
+                            ),
                           ),
                         );
                       },
@@ -105,7 +105,6 @@ class HomePage extends StatelessWidget {
         currentIndex: 1,
         onTap: (index) {
           if (index == 2) {
-            // 설정 아이콘 클릭 시
             showModalBottomSheet(
               context: context,
               shape: const RoundedRectangleBorder(
@@ -133,7 +132,6 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  // ✅ 설정 모달 바텀시트
   Widget _buildSettingsSheet(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -142,10 +140,15 @@ class HomePage extends StatelessWidget {
           leading: const Icon(Icons.person),
           title: const Text('마이페이지'),
           onTap: () {
-            Navigator.pop(context); // 모달 닫기
+            Navigator.pop(context);
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => MyPage()), // MyPage로 이동
+              MaterialPageRoute(
+                builder: (_) => MyPage(
+                  userId: userId,
+                  nickname: userName,
+                ),
+              ),
             );
           },
         ),
@@ -154,7 +157,7 @@ class HomePage extends StatelessWidget {
           title: const Text('알림'),
           onTap: () {
             Navigator.pop(context);
-            // 알림 페이지로 이동 (추후 구현)
+            // 알림 페이지 이동 (필요 시 구현)
           },
         ),
         ListTile(
@@ -162,10 +165,12 @@ class HomePage extends StatelessWidget {
           title: const Text('로그아웃'),
           onTap: () {
             Navigator.pop(context);
-            // 로그아웃 처리 (추후 구현)
+            // 로그아웃 처리 (필요 시 구현)
           },
         ),
       ],
     );
   }
 }
+
+

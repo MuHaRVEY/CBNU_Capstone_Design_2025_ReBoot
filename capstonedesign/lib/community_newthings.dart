@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class CommunityNewThingsPage extends StatefulWidget {
-  const CommunityNewThingsPage({Key? key}) : super(key: key);
+  final String userId;
+  final String nickname;
+
+  const CommunityNewThingsPage({
+    Key? key,
+    required this.userId,
+    required this.nickname,
+  }) : super(key: key);
 
   @override
   State<CommunityNewThingsPage> createState() => _CommunityNewThingsPageState();
@@ -13,40 +19,24 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController regionController = TextEditingController();
 
-  String nickname = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadNickname();
-  }
-
-  Future<void> _loadNickname() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) {
-      final snapshot = await FirebaseDatabase.instance.ref('users/$uid/nickname').get();
-      setState(() {
-        nickname = snapshot.value.toString();
-      });
-    }
-  }
-
-  void _savePost(BuildContext context) async {
+  Future<void> _savePost(BuildContext context) async {
     final title = titleController.text.trim();
     final region = regionController.text.trim();
 
     if (title.isEmpty || region.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('제목, 지역이 비어 있습니다.')),
+        const SnackBar(content: Text('제목과 지역을 모두 입력해주세요.')),
       );
       return;
     }
 
-    final databaseRef = FirebaseDatabase.instance.ref('community_posts');
-    final newPostRef = databaseRef.push();
+    final postsRef = FirebaseDatabase.instance.ref('community_posts');
+    final newPostRef = postsRef.push();
+    final postId = newPostRef.key;
 
     await newPostRef.set({
-      'username': nickname,
+      'userId': widget.userId, // 또는 widget.nickname 원할 시
+      'username' : widget.nickname,
       'title': title,
       'region': region,
       'time': DateTime.now().toIso8601String(),
@@ -55,6 +45,20 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
       'imagePath': 'assets/images/image_plogging_sample.jpg',
     });
 
+    // ✅ 사용자 데이터에 게시글 ID 연결
+    if (postId != null) {
+      print('📝 postId: $postId');
+      print('🧷 userId: ${widget.userId}');
+      await FirebaseDatabase.instance
+          .ref('users/${widget.userId}/myPosts/$postId')
+          .set(true);
+      print('✅ myPosts에 게시글 ID 추가 완료');
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('게시글이 저장되었습니다.')),
+    );
+
     Navigator.pop(context);
   }
 
@@ -62,7 +66,7 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('새 게시물 작성'),
+        title: const Text('새 게시물 작성'),
         backgroundColor: Colors.green.shade700,
       ),
       body: Padding(
@@ -86,12 +90,16 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
               ),
             ),
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => _savePost(context),
-              child: const Text('작성 완료'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green.shade600,
-                foregroundColor: Colors.white,
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () => _savePost(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade600,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('작성 완료'),
               ),
             ),
           ],
@@ -100,3 +108,6 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
     );
   }
 }
+
+
+

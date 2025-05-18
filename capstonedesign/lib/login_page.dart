@@ -39,7 +39,10 @@ class _LoginPageState extends State<LoginPage> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => HomePage(userName: nickname),
+              builder: (_) => HomePage(
+                userId: id,
+                userName: nickname,
+              ),
             ),
           );
         } else {

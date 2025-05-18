@@ -5,10 +5,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'community_popular.dart';
 import 'community_region.dart';
 import 'community_newthings.dart';
-import 'community_detail.dart'; // 상세 페이지 추가
+import 'community_detail.dart';
 
 class CommunityEntirePage extends StatefulWidget {
-  const CommunityEntirePage({Key? key}) : super(key: key);
+  final String userId;
+  final String nickname;
+
+  const CommunityEntirePage({
+    Key? key,
+    required this.userId,
+    required this.nickname,
+  }) : super(key: key);
 
   @override
   State<CommunityEntirePage> createState() => _CommunityEntirePageState();
@@ -20,25 +27,11 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
   final tabs = ['전체', '인기', '지역', '챌린지'];
 
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('community_posts');
-  String nickname = '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: tabs.length, vsync: this);
-    _loadNickname();
-  }
-
-  Future<void> _loadNickname() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) {
-      final snapshot = await FirebaseDatabase.instance.ref('users/$uid/nickname').get();
-      if (snapshot.exists) {
-        setState(() {
-          nickname = snapshot.value.toString();
-        });
-      }
-    }
   }
 
   @override
@@ -66,7 +59,7 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      nickname.isNotEmpty ? '$nickname님 안녕하세요 👋' : '',
+                      '${widget.nickname}님 안녕하세요 👋',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -121,7 +114,12 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const CommunityNewThingsPage()),
+            MaterialPageRoute(
+              builder: (context) => CommunityNewThingsPage(
+                userId: widget.userId,
+                nickname: widget.nickname,
+              ),
+            ),
           );
         },
       ),
@@ -147,7 +145,9 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
           padding: const EdgeInsets.all(16),
           itemCount: posts.length,
           itemBuilder: (context, index) {
-            final post = posts[index].value;
+            final postEntry = posts[index];
+            final post = postEntry.value as Map<dynamic, dynamic>; // 🔧 핵심 수정
+
             return buildCommunityPost(
               username: post['username'] ?? '익명',
               title: post['title'] ?? '제목 없음',
@@ -260,3 +260,4 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
     );
   }
 }
+
