@@ -146,7 +146,9 @@ class _MyPageState extends State<MyPage> {
           children: [
             _buildBottomButton(Icons.settings, '설정', () {}),
             _buildBottomButton(Icons.notifications, '알림', () {}),
-            _buildBottomButton(Icons.logout, '로그아웃', () {}),
+            _buildBottomButton(Icons.logout, '로그아웃', () {
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            }),
           ],
         ),
       ),
@@ -198,8 +200,7 @@ class _MyPageState extends State<MyPage> {
 
   Widget _verticalDivider() => Container(height: 30, width: 1, color: Colors.grey.shade400);
 
-  Widget _buildChallengeDropdown() =>
-      _buildDropdown('진행중인 챌린지', currentChallenges, Icons.flag);
+  Widget _buildChallengeDropdown() => _buildDropdown('진행중인 챌린지', currentChallenges, Icons.flag);
 
   Widget _buildMyPostsDropdown() {
     return Container(
@@ -217,14 +218,11 @@ class _MyPageState extends State<MyPage> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const ListTile(title: Text('불러오는 중...'));
               }
-
               if (!snapshot.hasData || snapshot.data!.value == null) {
                 return const ListTile(title: Text('삭제된 게시글입니다.'));
               }
-
               final post = snapshot.data!.value as Map;
               final title = post['title'] ?? '제목 없음';
-
               return ListTile(
                 leading: const Icon(Icons.article_outlined),
                 title: Text(title, style: const TextStyle(fontSize: 14)),
@@ -233,13 +231,9 @@ class _MyPageState extends State<MyPage> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => CommunityDetailPage(
-                        username: post['username'] ?? '',
-                        title: post['title'] ?? '',
-                        time: post['time'] ?? '',
-                        region: post['region'] ?? '',
-                        likes: post['likes'] ?? 0,
-                        comments: post['comments'] ?? 0,
-                        imagePath: post['imagePath'] ?? '',
+                        postId: postKey,
+                        userId: widget.userId,
+                        nickname: widget.nickname,
                       ),
                     ),
                   );

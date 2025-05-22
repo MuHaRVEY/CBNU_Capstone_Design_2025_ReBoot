@@ -25,7 +25,6 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final tabs = ['전체', '인기', '지역', '챌린지'];
-
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('community_posts');
 
   @override
@@ -38,6 +37,19 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void openDetailPage(String postId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CommunityDetailPage(
+          postId: postId,
+          userId: widget.userId,
+          nickname: widget.nickname,
+        ),
+      ),
+    );
   }
 
   @override
@@ -97,8 +109,8 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                     controller: _tabController,
                     children: [
                       _buildEntireTab(),
-                      const CommunityPopularPage(),
-                      const CommunityRegionPage(),
+                      CommunityPopularPage(onTapPost: (post) => openDetailPage(post.key!)),
+                      CommunityRegionPage(onTapPost: (post) => openDetailPage(post.key!)),
                       _buildPlaceholderTab('챌린지 게시물 준비 중'),
                     ],
                   ),
@@ -138,24 +150,70 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
           return const Center(child: Text('게시물이 없습니다.'));
         }
 
-        final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
-        final posts = data.entries.toList().reversed.toList();
+        final posts = snapshot.data!.snapshot.children.toList();
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: posts.length,
           itemBuilder: (context, index) {
-            final postEntry = posts[index];
-            final post = postEntry.value as Map<dynamic, dynamic>; // 🔧 핵심 수정
+            final post = posts[posts.length - 1 - index];
+            final data = post.value as Map;
 
-            return buildCommunityPost(
-              username: post['username'] ?? '익명',
-              title: post['title'] ?? '제목 없음',
-              time: post['time']?.toString() ?? '',
-              region: post['region'] ?? '',
-              likes: post['likes'] ?? 0,
-              comments: post['comments'] ?? 0,
-              imagePath: post['imagePath'] ?? '',
+            return GestureDetector(
+              onTap: () => openDetailPage(post.key!),
+              child: Card(
+                color: Colors.white.withOpacity(0.95),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: Colors.green.shade300,
+                            child: const Icon(Icons.person, color: Colors.white),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(data['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Text('${data['username']} · ${data['time']} · ${data['region']}',
+                                        style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                    const Spacer(),
+                                    Icon(Icons.favorite, size: 14, color: Colors.red.shade400),
+                                    const SizedBox(width: 4),
+                                    Text('${data['likes'] ?? 0}', style: const TextStyle(fontSize: 12)),
+                                    const SizedBox(width: 12),
+                                    Icon(Icons.chat_bubble_outline, size: 14, color: Colors.grey),
+                                    const SizedBox(width: 4),
+                                    Text('${data['comments'] ?? 0}', style: const TextStyle(fontSize: 12)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if ((data['imagePath'] ?? '').isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.asset(data['imagePath'], fit: BoxFit.cover),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             );
           },
         );
@@ -171,93 +229,4 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
       ),
     );
   }
-
-  Widget buildCommunityPost({
-    required String username,
-    required String title,
-    required String time,
-    required String region,
-    required int likes,
-    required int comments,
-    required String imagePath,
-  }) {
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CommunityDetailPage(
-              username: username,
-              title: title,
-              time: time,
-              region: region,
-              likes: likes,
-              comments: comments,
-              imagePath: imagePath,
-            ),
-          ),
-        );
-      },
-      child: Card(
-        color: Colors.white.withOpacity(0.95),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.only(bottom: 16),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Colors.green.shade300,
-                    child: const Icon(Icons.person, color: Colors.white),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Text('$username · $time · $region',
-                                style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                            const Spacer(),
-                            Icon(Icons.favorite, size: 14, color: Colors.red.shade400),
-                            const SizedBox(width: 4),
-                            Text('$likes', style: const TextStyle(fontSize: 12)),
-                            const SizedBox(width: 12),
-                            Icon(Icons.chat_bubble_outline, size: 14, color: Colors.grey),
-                            const SizedBox(width: 4),
-                            Text('$comments', style: const TextStyle(fontSize: 12)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: imagePath.isNotEmpty
-                    ? (imagePath.startsWith('http')
-                    ? Image.network(imagePath, fit: BoxFit.cover)
-                    : Image.asset(imagePath, fit: BoxFit.cover))
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
-

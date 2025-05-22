@@ -115,60 +115,44 @@ class HomePage extends StatelessWidget {
           }
         },
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.sports_esports),
-            label: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: '',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.sports_esports), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: ''),
         ],
       ),
     );
   }
 
   Widget _buildSettingsSheet(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ListTile(
-          leading: const Icon(Icons.person),
-          title: const Text('마이페이지'),
-          onTap: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => MyPage(
-                  userId: userId,
-                  nickname: userName,
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: const Text('마이페이지'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MyPage(userId: userId, nickname: userName),
                 ),
-              ),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.notifications),
-          title: const Text('알림'),
-          onTap: () {
-            Navigator.pop(context);
-            // 알림 페이지 이동 (필요 시 구현)
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.logout),
-          title: const Text('로그아웃'),
-          onTap: () {
-            Navigator.pop(context);
-            // 로그아웃 처리 (필요 시 구현)
-          },
-        ),
-      ],
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('로그아웃'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+          ),
+        ],
+      ),
     );
   }
 }
