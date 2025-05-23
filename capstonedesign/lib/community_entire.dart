@@ -190,13 +190,8 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                                     Text('${data['username']} · ${data['time']} · ${data['region']}',
                                         style: const TextStyle(color: Colors.grey, fontSize: 12)),
                                     const Spacer(),
-                                    Icon(Icons.favorite, size: 14, color: Colors.red.shade400),
-                                    const SizedBox(width: 4),
-                                    Text('${data['likes'] ?? 0}', style: const TextStyle(fontSize: 12)),
-                                    const SizedBox(width: 12),
-                                    Icon(Icons.chat_bubble_outline, size: 14, color: Colors.grey),
-                                    const SizedBox(width: 4),
-                                    Text('${data['comments'] ?? 0}', style: const TextStyle(fontSize: 12)),
+                                    // 좋아요, 댓글 수 실시간 표시
+                                    _buildLikeAndCommentCounts(post.key!),
                                   ],
                                 ),
                               ],
@@ -208,7 +203,7 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                       if ((data['imagePath'] ?? '').isNotEmpty)
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.asset(data['imagePath'], fit: BoxFit.cover),
+                          child: Image.network(data['imagePath'], fit: BoxFit.cover), // Image.asset → Image.network
                         ),
                     ],
                   ),
@@ -220,6 +215,53 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
       },
     );
   }
+
+// 게시글 좋아요/댓글 수 실시간 표시 위젯
+  Widget _buildLikeAndCommentCounts(String postId) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 좋아요 수
+        StreamBuilder<DatabaseEvent>(
+          stream: FirebaseDatabase.instance.ref('likes/$postId').onValue,
+          builder: (context, snapshot) {
+            int likeCount = 0;
+            if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+              final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>?;
+              likeCount = data?.length ?? 0;
+            }
+            return Row(
+              children: [
+                const Icon(Icons.favorite, size: 14, color: Colors.red),
+                const SizedBox(width: 2),
+                Text('$likeCount', style: const TextStyle(fontSize: 12)),
+                const SizedBox(width: 10),
+              ],
+            );
+          },
+        ),
+        // 댓글 수
+        StreamBuilder<DatabaseEvent>(
+          stream: FirebaseDatabase.instance.ref('commentsDetail/$postId').onValue,
+          builder: (context, snapshot) {
+            int commentCount = 0;
+            if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+              final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>?;
+              commentCount = data?.length ?? 0;
+            }
+            return Row(
+              children: [
+                const Icon(Icons.chat_bubble_outline, size: 14, color: Colors.grey),
+                const SizedBox(width: 2),
+                Text('$commentCount', style: const TextStyle(fontSize: 12)),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
 
   Widget _buildPlaceholderTab(String message) {
     return Center(
