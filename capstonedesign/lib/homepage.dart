@@ -3,24 +3,26 @@ import 'my_page.dart';
 import 'community_entire.dart';
 
 class HomePage extends StatelessWidget {
+  final String userId;
   final String userName;
 
-  const HomePage({super.key, this.userName = '??'});
+  const HomePage({
+    super.key,
+    required this.userId,
+    required this.userName,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // ✅ 전체 배경 이미지
           Positioned.fill(
             child: Image.asset(
               'assets/images/image_firstpage_login.png',
               fit: BoxFit.cover,
             ),
           ),
-
-          // 콘텐츠
           SafeArea(
             child: Column(
               children: [
@@ -34,8 +36,6 @@ class HomePage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // ✅ 캐릭터 이미지 중앙 배치
                 Expanded(
                   child: Center(
                     child: Image.asset(
@@ -45,17 +45,17 @@ class HomePage extends StatelessWidget {
                     ),
                   ),
                 ),
-
-                // 버튼들
                 Column(
                   children: [
                     ElevatedButton.icon(
                       onPressed: () {
-                        // 커뮤니티 이동
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const CommunityEntirePage(),
+                            builder: (context) => CommunityEntirePage(
+                              userId: userId,
+                              nickname: userName,
+                            ),
                           ),
                         );
                       },
@@ -75,7 +75,7 @@ class HomePage extends StatelessWidget {
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
                       onPressed: () {
-                        // 플로깅 이동
+                        // 플로깅 이동 (추후 구현)
                       },
                       icon: const Icon(Icons.map_outlined),
                       label: const Text('플로깅'),
@@ -105,10 +105,9 @@ class HomePage extends StatelessWidget {
         currentIndex: 1,
         onTap: (index) {
           if (index == 2) {
-            // 설정 아이콘 클릭 시
             showModalBottomSheet(
               context: context,
-              shape: RoundedRectangleBorder(
+              shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               builder: (context) => _buildSettingsSheet(context),
@@ -116,56 +115,46 @@ class HomePage extends StatelessWidget {
           }
         },
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.sports_esports),
-            label: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: '',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.sports_esports), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: ''),
         ],
       ),
     );
   }
 
-  // ✅ 설정 모달 바텀시트
   Widget _buildSettingsSheet(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ListTile(
-          leading: Icon(Icons.person),
-          title: Text('마이페이지'),
-          onTap: () {
-            Navigator.pop(context); // 모달 닫기
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => MyPage()), // MyPage로 이동
-            );
-          },
-        ),
-        ListTile(
-          leading: Icon(Icons.notifications),
-          title: Text('알림'),
-          onTap: () {
-            Navigator.pop(context);
-            // 알림 페이지로 이동 (추후 구현)
-          },
-        ),
-        ListTile(
-          leading: Icon(Icons.logout),
-          title: Text('로그아웃'),
-          onTap: () {
-            Navigator.pop(context);
-            // 로그아웃 처리 (추후 구현)
-          },
-        ),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: const Text('마이페이지'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MyPage(userId: userId, nickname: userName),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('로그아웃'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+          ),
+        ],
+      ),
     );
   }
 }
+
+
