@@ -21,15 +21,20 @@ class CommunityDetailPage extends StatefulWidget {
 class _CommunityDetailPageState extends State<CommunityDetailPage> {
   final DatabaseReference _dbRef = FirebaseDatabase.instance.reference();
   Map<dynamic, dynamic>? postData;
-  bool isLiked = false;
   List<Map<dynamic, dynamic>> comments = [];
   final TextEditingController _commentController = TextEditingController();
+
+  int likeCount = 0;
+  int commentCount = 0;
+  bool isLiked = false;
 
   @override
   void initState() {
     super.initState();
     _loadPost();
     _loadComments();
+    _listenLikes();
+    _listenCommentsCount();
     _checkIfLiked();
   }
 
@@ -40,6 +45,16 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
         postData = snapshot.snapshot.value as Map<dynamic, dynamic>;
       });
     }
+  }
+
+  void _listenLikes() {
+    _dbRef.child('likes/${widget.postId}').onValue.listen((event) {
+      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+      setState(() {
+        likeCount = data?.length ?? 0;
+        isLiked = data?.containsKey(widget.userId) ?? false;
+      });
+    });
   }
 
   Future<void> _checkIfLiked() async {
@@ -56,7 +71,7 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     } else {
       await likeRef.set(true);
     }
-    _checkIfLiked();
+    // 실시간 리스너가 반영
   }
 
   Future<void> _loadComments() async {
@@ -66,7 +81,29 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
       setState(() {
         comments = data.values.map((e) => e as Map<dynamic, dynamic>).toList();
       });
+    } else {
+      setState(() {
+        comments = [];
+      });
     }
+  }
+
+  void _listenCommentsCount() {
+    _dbRef.child('commentsDetail/${widget.postId}').onValue.listen((event) {
+      setState(() {
+        commentCount = event.snapshot.children.length;
+      });
+      if (event.snapshot.value != null) {
+        final data = event.snapshot.value as Map<dynamic, dynamic>;
+        setState(() {
+          comments = data.values.map((e) => e as Map<dynamic, dynamic>).toList();
+        });
+      } else {
+        setState(() {
+          comments = [];
+        });
+      }
+    });
   }
 
   Future<void> _addComment(String text) async {
@@ -79,7 +116,7 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     });
     _commentController.clear();
-    _loadComments();
+    // 실시간 리스너 반영
   }
 
   @override
@@ -98,11 +135,15 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(postData!['title'] ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(
+              postData!['title'] ?? '',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             Text('작성자: ${postData!['username'] ?? '익명'}'),
             Text('지역: ${postData!['region'] ?? '미지정'}'),
-            Text('작성일: ${_formatTimestamp(postData!['timestamp'])}'),
+            // 작성일 포맷 변경!
+            Text('작성일: ${_formatTimestamp(postData!['time'])}'), // 여기서 time 필드 사용!
             const SizedBox(height: 16),
             if (postData!['imagePath'] != null)
               Image.network(postData!['imagePath'], height: 200, fit: BoxFit.cover),
@@ -110,16 +151,24 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
             Row(
               children: [
                 IconButton(
-                  icon: Icon(isLiked ? Icons.favorite : Icons.favorite_border, color: Colors.red),
+                  icon: Icon(
+                    isLiked ? Icons.favorite : Icons.favorite_border,
+                    color: Colors.red,
+                  ),
                   onPressed: _toggleLike,
                 ),
-                const Text('좋아요')
+                Text('$likeCount'),
+                const SizedBox(width: 16),
+                const Icon(Icons.comment, color: Colors.blue),
+                Text('$commentCount'),
               ],
             ),
             const Divider(),
             const Text('댓글', style: TextStyle(fontWeight: FontWeight.bold)),
             Expanded(
-              child: ListView.builder(
+              child: comments.isEmpty
+                  ? const Center(child: Text('아직 댓글이 없습니다.'))
+                  : ListView.builder(
                 itemCount: comments.length,
                 itemBuilder: (context, index) {
                   final comment = comments[index];
@@ -153,7 +202,17 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
 
   String _formatTimestamp(dynamic timestamp) {
     if (timestamp == null) return '';
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    return DateFormat('yyyy-MM-dd HH:mm').format(dt);
+    if (timestamp is int) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
+      return DateFormat('yyyy년 MM월 dd일 HH:mm').format(dt);
+    } else if (timestamp is String) {
+      try {
+        final dt = DateTime.parse(timestamp);
+        return DateFormat('yyyy년 MM월 dd일 HH:mm').format(dt);
+      } catch (e) {
+        return timestamp.toString(); // 예외 발생 시 원본 값 출력
+      }
+    }
+    return timestamp.toString();
   }
 }
