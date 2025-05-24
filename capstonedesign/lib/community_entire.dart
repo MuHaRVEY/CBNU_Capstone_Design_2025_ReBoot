@@ -5,8 +5,8 @@ import 'community_popular.dart';
 import 'community_region.dart';
 import 'community_newthings.dart';
 import 'community_detail.dart';
+import 'community_challenge.dart';
 
-// === 전체 탭 별도의 StatelessWidget으로 분리 ===
 class CommunityEntireTab extends StatelessWidget {
   final void Function(String postId) openDetailPage;
   const CommunityEntireTab({
@@ -291,7 +291,13 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                         onTapPost: (post) => openDetailPage(post.key!),
                         key: UniqueKey(),
                       ),
-                      _buildPlaceholderTab('챌린지 게시물 준비 중'),
+                      CommunityChallengePage(
+                        userId: widget.userId,
+                        nickname: widget.nickname,
+                        // region 값이 있으면 전달 (예: '서울' 등)
+                        region: '',
+                        key: UniqueKey(),
+                      ),
                     ],
                   ),
                 ),
