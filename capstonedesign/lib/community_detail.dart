@@ -140,13 +140,13 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            Text('작성자: ${postData!['username'] ?? '익명'}'),
+            Text('작성자: ${postData!['nickname'] ?? '익명'}'),
             Text('지역: ${postData!['region'] ?? '미지정'}'),
-            // 작성일 포맷 변경!
-            Text('작성일: ${_formatTimestamp(postData!['time'])}'), // 여기서 time 필드 사용!
+            Text('작성일: ${_formatTimestamp(postData!['createdAt'])}'),  // ← 여기!
             const SizedBox(height: 16),
-            if (postData!['imagePath'] != null)
-              Image.network(postData!['imagePath'], height: 200, fit: BoxFit.cover),
+            if (postData!['imageUrl'] != null && (postData!['imageUrl'] as String).isNotEmpty)
+              Image.network(postData!['imageUrl'], height: 200, fit: BoxFit.cover),
+
             const SizedBox(height: 16),
             Row(
               children: [
