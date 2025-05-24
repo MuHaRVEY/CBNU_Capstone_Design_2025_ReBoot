@@ -119,6 +119,90 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     // 실시간 리스너 반영
   }
 
+  Future<void> _confirmDelete() async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('게시글 삭제'),
+        content: const Text('정말 삭제하시겠습니까?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('삭제')),
+        ],
+      ),
+    );
+    if (shouldDelete == true) {
+      await _dbRef.child('community_posts/${widget.postId}').remove();
+      if (mounted) Navigator.pop(context); // 리스트로 이동
+    }
+  }
+
+  void _showEditDialog() {
+    final titleController = TextEditingController(text: postData!['title'] ?? '');
+    final contentController = TextEditingController(text: postData!['content'] ?? '');
+    final regionController = TextEditingController(text: postData!['region'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('게시글 수정'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: '제목'),
+                ),
+                TextField(
+                  controller: contentController,
+                  decoration: const InputDecoration(labelText: '내용'),
+                  maxLines: 5,
+                ),
+                TextField(
+                  controller: regionController,
+                  decoration: const InputDecoration(labelText: '지역'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+            TextButton(
+              onPressed: () async {
+                await _dbRef.child('community_posts/${widget.postId}').update({
+                  'title': titleController.text.trim(),
+                  'content': contentController.text.trim(),
+                  'region': regionController.text.trim(),
+                });
+                Navigator.pop(context);
+                _loadPost();
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return '';
+    if (timestamp is int) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
+      return DateFormat('yyyy년 MM월 dd일 HH:mm').format(dt);
+    } else if (timestamp is String) {
+      try {
+        final dt = DateTime.parse(timestamp);
+        return DateFormat('yyyy년 MM월 dd일 HH:mm').format(dt);
+      } catch (e) {
+        return timestamp.toString(); // 예외 발생 시 원본 값 출력
+      }
+    }
+    return timestamp.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (postData == null) {
@@ -129,7 +213,25 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('게시글 상세')),
+      appBar: AppBar(
+        title: const Text('게시글 상세'),
+        actions: [
+          if (postData!['userId'] == widget.userId)
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') {
+                  _showEditDialog();
+                } else if (value == 'delete') {
+                  _confirmDelete();
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'edit', child: Text('수정')),
+                const PopupMenuItem(value: 'delete', child: Text('삭제')),
+              ],
+            ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -142,11 +244,10 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
             const SizedBox(height: 8),
             Text('작성자: ${postData!['nickname'] ?? '익명'}'),
             Text('지역: ${postData!['region'] ?? '미지정'}'),
-            Text('작성일: ${_formatTimestamp(postData!['createdAt'])}'),  // ← 여기!
+            Text('작성일: ${_formatTimestamp(postData!['createdAt'])}'),
             const SizedBox(height: 16),
             if (postData!['imageUrl'] != null && (postData!['imageUrl'] as String).isNotEmpty)
               Image.network(postData!['imageUrl'], height: 200, fit: BoxFit.cover),
-
             const SizedBox(height: 16),
             Row(
               children: [
@@ -198,21 +299,5 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
         ),
       ),
     );
-  }
-
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp == null) return '';
-    if (timestamp is int) {
-      final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-      return DateFormat('yyyy년 MM월 dd일 HH:mm').format(dt);
-    } else if (timestamp is String) {
-      try {
-        final dt = DateTime.parse(timestamp);
-        return DateFormat('yyyy년 MM월 dd일 HH:mm').format(dt);
-      } catch (e) {
-        return timestamp.toString(); // 예외 발생 시 원본 값 출력
-      }
-    }
-    return timestamp.toString();
   }
 }
