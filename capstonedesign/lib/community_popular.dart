@@ -1,114 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 
-class CommunityPopularPage extends StatelessWidget {
+class CommunityPopularPage extends StatefulWidget {
   final Function(DataSnapshot post) onTapPost;
 
   const CommunityPopularPage({Key? key, required this.onTapPost}) : super(key: key);
 
-  // 좋아요 수를 비동기로 가져와 리스트를 인기순 정렬 (StreamBuilder에서는 동기 불가 → 대안: 실시간 X, fetch 후 정렬)
-  Future<List<DataSnapshot>> _fetchAndSortPosts() async {
-    final snapshot = await FirebaseDatabase.instance.ref('community_posts').once();
-    final posts = snapshot.snapshot.children.toList();
-
-    // 각 postId별 likes child 수 가져오기
-    final likeCounts = <String, int>{};
-    for (var post in posts) {
-      final postId = post.key!;
-      final likeSnap = await FirebaseDatabase.instance.ref('likes/$postId').once();
-      final likesData = likeSnap.snapshot.value as Map?;
-      likeCounts[postId] = likesData?.length ?? 0;
-    }
-
-    // posts를 좋아요 순으로 정렬
-    posts.sort((a, b) {
-      final aId = a.key!;
-      final bId = b.key!;
-      return (likeCounts[bId] ?? 0).compareTo(likeCounts[aId] ?? 0);
-    });
-
-    return posts;
-  }
-
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<DataSnapshot>>(
-      future: _fetchAndSortPosts(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final entries = snapshot.data!;
+  State<CommunityPopularPage> createState() => _CommunityPopularPageState();
+}
 
-        if (entries.isEmpty) {
-          return const Center(child: Text('게시물이 없습니다.'));
-        }
+class _CommunityPopularPageState extends State<CommunityPopularPage> {
+  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('community_posts');
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: entries.length,
-          itemBuilder: (context, index) {
-            final post = entries[index];
-            final data = post.value as Map;
-
-            return GestureDetector(
-              onTap: () => onTapPost(post),
-              child: Card(
-                color: Colors.white.withOpacity(0.95),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                margin: const EdgeInsets.only(bottom: 16),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: Colors.green.shade300,
-                            child: const Icon(Icons.person, color: Colors.white),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(data['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Text('${data['time']} · ${data['region']}',
-                                        style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                    const Spacer(),
-                                    // 실시간 좋아요/댓글 카운트
-                                    _buildLikeAndCommentCounts(post.key!),
-                                  ],
-                                )
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      if ((data['imagePath'] ?? '').isNotEmpty)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(data['imagePath'], fit: BoxFit.cover),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
+  String _formatDate(String? isoDate) {
+    if (isoDate == null || isoDate.isEmpty) return '';
+    final date = DateTime.tryParse(isoDate);
+    if (date == null) return '';
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
+        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
-  // 게시글 좋아요/댓글 수 실시간 표시 위젯
   Widget _buildLikeAndCommentCounts(String postId) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -151,6 +63,122 @@ class CommunityPopularPage extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DatabaseEvent>(
+      stream: _dbRef.onValue,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+          return const Center(child: Text('게시물이 없습니다.'));
+        }
+
+        // 게시글을 리스트로 변환
+        final postList = snapshot.data!.snapshot.children.toList();
+        // 인기순 정렬(좋아요 많은 순). 필요 없다면 이 부분 제거 가능
+        postList.sort((a, b) {
+          final aMap = Map<String, dynamic>.from(a.value as Map);
+          final bMap = Map<String, dynamic>.from(b.value as Map);
+          final aLike = aMap['likeCount'] ?? 0;
+          final bLike = bMap['likeCount'] ?? 0;
+          return bLike.compareTo(aLike); // likeCount 기준 내림차순
+        });
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: postList.length,
+          itemBuilder: (context, index) {
+            final post = postList[index];
+            final data = Map<String, dynamic>.from(post.value as Map);
+
+            return GestureDetector(
+              onTap: () => widget.onTapPost(post),
+              child: Card(
+                color: Colors.white.withOpacity(0.95),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: Colors.green.shade300,
+                            child: const Icon(Icons.person, color: Colors.white),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  data['title'] ?? '',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    // 작성자
+                                    if (data['nickname'] != null && data['nickname'].toString().isNotEmpty)
+                                      Text('${data['nickname']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                    // 날짜
+                                    if (data['createdAt'] != null && data['createdAt'].toString().isNotEmpty)
+                                      ...[
+                                        const SizedBox(width: 10),
+                                        Text(_formatDate(data['createdAt']), style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                      ],
+                                    // 지역
+                                    if (data['region'] != null && data['region'].toString().isNotEmpty)
+                                      ...[
+                                        const SizedBox(width: 10),
+                                        Text('${data['region']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                      ],
+                                    const Spacer(),
+                                    _buildLikeAndCommentCounts(post.key!), // 좋아요/댓글 카운트 표시!
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      // 이미지
+                      if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            data['imageUrl'],
+                            fit: BoxFit.cover,
+                            height: 160,
+                            width: double.infinity,
+                            errorBuilder: (context, error, stackTrace) =>
+                            const Icon(Icons.broken_image, size: 80),
+                          ),
+                        ),
+                      // 내용
+                      if (data['content'] != null && data['content'].toString().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Text(data['content'], style: const TextStyle(fontSize: 14)),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

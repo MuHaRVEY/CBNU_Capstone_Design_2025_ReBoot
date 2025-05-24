@@ -15,117 +15,14 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
   String _searchText = '';
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('community_posts');
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: '지역을 검색하세요',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.9),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(30),
-                borderSide: BorderSide.none,
-              ),
-            ),
-            onChanged: (value) {
-              setState(() {
-                _searchText = value;
-              });
-            },
-          ),
-        ),
-        Expanded(
-          child: StreamBuilder<DatabaseEvent>(
-            stream: _dbRef.onValue,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
-                return const Center(child: Text('게시물이 없습니다.'));
-              }
-
-              final entries = snapshot.data!.snapshot.children.where((entry) {
-                final post = entry.value as Map;
-                return post['region']?.toString().toLowerCase().contains(_searchText.toLowerCase()) ?? false;
-              }).toList();
-
-              entries.sort((a, b) {
-                final timeA = (a.value as Map)['time']?.toString() ?? '';
-                final timeB = (b.value as Map)['time']?.toString() ?? '';
-                return timeB.compareTo(timeA);
-              });
-
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: entries.length,
-                itemBuilder: (context, index) {
-                  final post = entries[index];
-                  final data = post.value as Map;
-
-                  return GestureDetector(
-                    onTap: () => widget.onTapPost(post),
-                    child: Card(
-                      color: Colors.white.withOpacity(0.95),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: Colors.green.shade300,
-                                  child: const Icon(Icons.person, color: Colors.white),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(data['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Text('${data['time']} · ${data['region']}',
-                                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                          const Spacer(),
-                                          _buildLikeAndCommentCounts(post.key!),
-                                        ],
-                                      )
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            if ((data['imagePath'] ?? '').isNotEmpty)
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(data['imagePath'], fit: BoxFit.cover),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
+  String _formatDate(String? isoDate) {
+    if (isoDate == null || isoDate.isEmpty) return '';
+    final date = DateTime.tryParse(isoDate);
+    if (date == null) return '';
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
+        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
-  // 게시글 좋아요/댓글 수 실시간 표시 위젯
   Widget _buildLikeAndCommentCounts(String postId) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -166,6 +63,157 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
               ],
             );
           },
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: '지역을 검색하세요',
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.9),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            onChanged: (value) {
+              setState(() {
+                _searchText = value.trim();
+              });
+            },
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<DatabaseEvent>(
+            stream: _dbRef.onValue,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+                return const Center(child: Text('게시물이 없습니다.'));
+              }
+
+              final postList = snapshot.data!.snapshot.children.toList();
+
+              // 지역명 필터링(포함 검색)
+              final filteredPosts = postList.where((post) {
+                final data = Map<String, dynamic>.from(post.value as Map);
+                if (_searchText.isEmpty) return true;
+                final region = (data['region'] ?? '').toString();
+                return region.contains(_searchText);
+              }).toList();
+
+              // 최신순
+              filteredPosts.sort((a, b) {
+                final aMap = Map<String, dynamic>.from(a.value as Map);
+                final bMap = Map<String, dynamic>.from(b.value as Map);
+                final aCreated = aMap['createdAt'] ?? '';
+                final bCreated = bMap['createdAt'] ?? '';
+                return bCreated.compareTo(aCreated);
+              });
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: filteredPosts.length,
+                itemBuilder: (context, index) {
+                  final post = filteredPosts[index];
+                  final data = Map<String, dynamic>.from(post.value as Map);
+
+                  return GestureDetector(
+                    onTap: () => widget.onTapPost(post),
+                    child: Card(
+                      color: Colors.white.withOpacity(0.95),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: Colors.green.shade300,
+                                  child: const Icon(Icons.person, color: Colors.white),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        data['title'] ?? '',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          // 작성자
+                                          if (data['nickname'] != null && data['nickname'].toString().isNotEmpty)
+                                            Text('${data['nickname']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                          // 날짜
+                                          if (data['createdAt'] != null && data['createdAt'].toString().isNotEmpty)
+                                            ...[
+                                              const SizedBox(width: 10),
+                                              Text(_formatDate(data['createdAt']), style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                            ],
+                                          // 지역
+                                          if (data['region'] != null && data['region'].toString().isNotEmpty)
+                                            ...[
+                                              const SizedBox(width: 10),
+                                              Text('${data['region']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                            ],
+                                          const Spacer(),
+                                          _buildLikeAndCommentCounts(post.key!),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            // 이미지
+                            if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  data['imageUrl'],
+                                  fit: BoxFit.cover,
+                                  height: 160,
+                                  width: double.infinity,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(Icons.broken_image, size: 80),
+                                ),
+                              ),
+                            // 내용
+                            if (data['content'] != null && data['content'].toString().isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 10),
+                                child: Text(data['content'], style: const TextStyle(fontSize: 14)),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ],
     );
