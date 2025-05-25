@@ -1,221 +1,278 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'community_detail.dart';
 
-class MyPage extends StatelessWidget {
-  // TODO: Firebase에서 사용자 이름을 가져오도록 변경
-  final String name = '김지훈';
+class MyPage extends StatefulWidget {
+  final String userId;
+  final String nickname;
 
-  // TODO: Firestore에서 사용자 상태 메시지 받아오기
-  final String statusMessage = '환경을 사랑하는 러너';
+  const MyPage({
+    Key? key,
+    required this.userId,
+    required this.nickname,
+  }) : super(key: key);
 
-  final String profileImagePath = 'assets/images/image_firstpage_login.png';
+  @override
+  State<MyPage> createState() => _MyPageState();
+}
 
-  // TODO: 누적 거리, 게시글 수, 챌린지 수도 Firestore에서 불러오기
-  final double totalDistance = 48.3;
-  final int postCount = 87;
-  final int challengeCount = 21;
+class _MyPageState extends State<MyPage> {
+  String name = '';
+  String statusMessage = '';
+  double totalDistance = 0.0;
+  int postCount = 0;
+  int challengeCount = 0;
+  List<String> currentChallenges = [];
+  List<String> myPosts = [];
+  List<String> likedPosts = [];
+  String profileImageUrl = '';
 
-  // TODO: 진행 중인 챌린지 - Firestore 리스트로 연동 예정
-  final List<String> currentChallenges = [
-    '성수동 플로깅 챌린지',
-    '중앙로 환경 정화 챌린지',
-    '주말 산책 챌린지',
-  ];
+  final String defaultImagePath = 'assets/images/image_firstpage_login.png';
 
-  // TODO: 내 게시글 리스트도 Firestore에서 받아오기
-  final List<String> myPosts = [
-    '플로깅 후기 공유합니다!',
-    '오늘은 산책만 했어요',
-    '비 오는 날엔 어떻게 하나요?',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
 
-  // TODO: 좋아요한 글도 Firestore에서 받아오기
-  final List<String> likedPosts = [
-    '환경 보호 꿀팁 모음',
-    '이번 주말 챌린지 참여 후기',
-  ];
+  Future<void> _loadUserData() async {
+    final ref = FirebaseDatabase.instance.ref('users/${widget.userId}');
+    final snapshot = await ref.get();
+
+    if (snapshot.exists) {
+      final data = snapshot.value as Map;
+      final rawMyPosts = data['myPosts'];
+
+      setState(() {
+        name = data['nickname'] ?? widget.nickname;
+        statusMessage = data['statusMessage'] ?? '';
+        totalDistance = (data['totalDistance'] ?? 0).toDouble();
+        postCount = data['postCount'] ?? 0;
+        challengeCount = data['challengeCount'] ?? 0;
+        currentChallenges = List<String>.from(data['currentChallenges'] ?? []);
+
+        if (rawMyPosts is Map) {
+          myPosts = rawMyPosts.keys.cast<String>().toList();
+        } else {
+          myPosts = [];
+        }
+
+        final rawLikedPosts = data['likedPosts'];
+        if (rawLikedPosts is Map) {
+          likedPosts = rawLikedPosts.keys.cast<String>().toList();
+        } else {
+          likedPosts = [];
+        }
+
+        profileImageUrl = data['profileImageUrl'] ?? '';
+      });
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile == null) return;
+
+    final storageRef = FirebaseStorage.instance.ref('profile_images/${widget.userId}.jpg');
+
+    try {
+      if (kIsWeb) {
+        final Uint8List data = await pickedFile.readAsBytes();
+        await storageRef.putData(data, SettableMetadata(contentType: 'image/jpeg'));
+      } else {
+        final file = File(pickedFile.path);
+        await storageRef.putFile(file);
+      }
+
+      final downloadUrl = await storageRef.getDownloadURL();
+      await FirebaseDatabase.instance.ref('users/${widget.userId}/profileImageUrl').set(downloadUrl);
+
+      setState(() {
+        profileImageUrl = '$downloadUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('프로필 이미지가 업데이트되었습니다.')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이미지 업로드에 실패했습니다.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('마이페이지'),
+        title: const Text('마이페이지'),
         backgroundColor: Colors.green.shade700,
         foregroundColor: Colors.white,
       ),
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage(profileImagePath),
+            image: AssetImage(defaultImagePath),
             fit: BoxFit.cover,
           ),
         ),
         child: ListView(
-          padding: EdgeInsets.fromLTRB(20, 16, 20, 16),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           children: [
-            SizedBox(height: 40),
+            const SizedBox(height: 40),
             _buildProfileSection(),
-            SizedBox(height: 30),
+            const SizedBox(height: 30),
             _buildStatsSection(),
-            SizedBox(height: 30),
+            const SizedBox(height: 30),
             _buildChallengeDropdown(),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             _buildMyPostsDropdown(),
             _buildLikedPostsDropdown(),
           ],
         ),
       ),
       bottomNavigationBar: Container(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.8),
-        ),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(color: Colors.white.withOpacity(0.8)),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _buildBottomButton(Icons.settings, '설정', () {}),
             _buildBottomButton(Icons.notifications, '알림', () {}),
-            _buildBottomButton(Icons.logout, '로그아웃', () {}),
+            _buildBottomButton(Icons.logout, '로그아웃', () {
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            }),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildProfileSection() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CircleAvatar(
+  Widget _buildProfileSection() => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      GestureDetector(
+        onTap: _pickAndUploadImage,
+        child: CircleAvatar(
           radius: 50,
-          backgroundImage: AssetImage(profileImagePath),
+          backgroundImage: profileImageUrl.isNotEmpty
+              ? NetworkImage(profileImageUrl)
+              : AssetImage(defaultImagePath) as ImageProvider,
         ),
-        SizedBox(width: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text(statusMessage, style: TextStyle(fontSize: 16, color: Colors.black87)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatsSection() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _buildStat('$totalDistance', 'km'),
-        _verticalDivider(),
-        _buildStat('$postCount', '개'),
-        _verticalDivider(),
-        _buildStat('$challengeCount', '회'),
-      ],
-    );
-  }
-
-  Widget _buildStat(String value, String unit) {
-    return Column(
-      children: [
-        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        SizedBox(height: 2),
-        Text(unit, style: TextStyle(fontSize: 12, color: Colors.black87)),
-      ],
-    );
-  }
-
-  Widget _verticalDivider() {
-    return Container(
-      height: 30,
-      width: 1,
-      color: Colors.grey.shade400,
-    );
-  }
-
-  Widget _buildChallengeDropdown() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
       ),
-      child: ExpansionTile(
-        title: Text('진행중인 챌린지', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        children: currentChallenges
-            .map(
-              (challenge) => Container(
-            margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(challenge, style: TextStyle(fontSize: 14)),
-            ),
-          ),
-        )
-            .toList(),
+      const SizedBox(width: 16),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(statusMessage, style: const TextStyle(fontSize: 16, color: Colors.black87)),
+        ],
       ),
-    );
-  }
+    ],
+  );
+
+  Widget _buildStatsSection() => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    children: [
+      _buildStat('$totalDistance', 'km'),
+      _verticalDivider(),
+      _buildStat('$postCount', '개'),
+      _verticalDivider(),
+      _buildStat('$challengeCount', '회'),
+    ],
+  );
+
+  Widget _buildStat(String value, String unit) => Column(
+    children: [
+      Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 2),
+      Text(unit, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+    ],
+  );
+
+  Widget _verticalDivider() => Container(height: 30, width: 1, color: Colors.grey.shade400);
+
+  Widget _buildChallengeDropdown() => _buildDropdown('진행중인 챌린지', currentChallenges, Icons.flag);
 
   Widget _buildMyPostsDropdown() {
     return Container(
-      margin: EdgeInsets.only(top: 12),
+      margin: const EdgeInsets.only(top: 12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.85),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ExpansionTile(
-        title: Text('내 게시글 보기', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        children: myPosts
-            .map(
-              (post) => ListTile(
-            title: Text(post, style: TextStyle(fontSize: 14)),
-            leading: Icon(Icons.article_outlined),
-            onTap: () {},
-          ),
-        )
-            .toList(),
+        title: const Text('내 게시글 보기', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        children: myPosts.map((postKey) {
+          return FutureBuilder<DataSnapshot>(
+            future: FirebaseDatabase.instance.ref('community_posts/$postKey').get(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const ListTile(title: Text('불러오는 중...'));
+              }
+              if (!snapshot.hasData || snapshot.data!.value == null) {
+                return const ListTile(title: Text('삭제된 게시글입니다.'));
+              }
+              final post = snapshot.data!.value as Map;
+              final title = post['title'] ?? '제목 없음';
+              return ListTile(
+                leading: const Icon(Icons.article_outlined),
+                title: Text(title, style: const TextStyle(fontSize: 14)),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CommunityDetailPage(
+                        postId: postKey,
+                        userId: widget.userId,
+                        nickname: widget.nickname,
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        }).toList(),
       ),
     );
   }
 
-  Widget _buildLikedPostsDropdown() {
-    return Container(
-      margin: EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ExpansionTile(
-        title: Text('좋아요한 글', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        children: likedPosts
-            .map(
-              (post) => ListTile(
-            title: Text(post, style: TextStyle(fontSize: 14)),
-            leading: Icon(Icons.favorite_outline),
-            onTap: () {},
-          ),
-        )
-            .toList(),
-      ),
-    );
-  }
+  Widget _buildLikedPostsDropdown() => _buildDropdown('좋아요한 글', likedPosts, Icons.favorite_outline);
 
-  Widget _buildBottomButton(IconData icon, String label, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 26),
-          SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 13)),
-        ],
-      ),
-    );
-  }
+  Widget _buildDropdown(String title, List<String> items, IconData icon) => Container(
+    margin: const EdgeInsets.only(top: 12),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.85),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: ExpansionTile(
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+      children: items.map((item) => ListTile(
+        title: Text(item, style: const TextStyle(fontSize: 14)),
+        leading: Icon(icon),
+        onTap: () {},
+      )).toList(),
+    ),
+  );
+
+  Widget _buildBottomButton(IconData icon, String label, VoidCallback onTap) => GestureDetector(
+    onTap: onTap,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 26),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(fontSize: 13)),
+      ],
+    ),
+  );
 }
