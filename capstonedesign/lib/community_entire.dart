@@ -6,11 +6,16 @@ import 'community_region.dart';
 import 'community_newthings.dart';
 import 'community_detail.dart';
 import 'community_challenge.dart';
+import 'community_makechallenge.dart';
 
 class CommunityEntireTab extends StatelessWidget {
   final void Function(String postId) openDetailPage;
+  final String userId;
+  final String nickname;
   const CommunityEntireTab({
     required this.openDetailPage,
+    required this.userId,
+    required this.nickname,
     Key? key,
   }) : super(key: key);
 
@@ -22,7 +27,6 @@ class CommunityEntireTab extends StatelessWidget {
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
-  // 좋아요/댓글 카운트는 FutureBuilder로 (stream 충돌 없음)
   Widget _buildLikeAndCommentCounts(String postId) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -192,6 +196,10 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
   void initState() {
     super.initState();
     _tabController = TabController(length: tabs.length, vsync: this);
+    _tabController.addListener(() {
+      // FAB 동작 변경 위해 rebuild 필요
+      setState(() {});
+    });
   }
 
   @override
@@ -209,15 +217,6 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
           userId: widget.userId,
           nickname: widget.nickname,
         ),
-      ),
-    );
-  }
-
-  Widget _buildPlaceholderTab(String message) {
-    return Center(
-      child: Text(
-        message,
-        style: const TextStyle(fontSize: 16, color: Colors.black54),
       ),
     );
   }
@@ -278,9 +277,10 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      // UniqueKey()로 각 탭 매번 새로 빌드
                       CommunityEntireTab(
                         openDetailPage: openDetailPage,
+                        userId: widget.userId,
+                        nickname: widget.nickname,
                         key: UniqueKey(),
                       ),
                       CommunityPopularPage(
@@ -294,7 +294,6 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                       CommunityChallengePage(
                         userId: widget.userId,
                         nickname: widget.nickname,
-                        // region 값이 있으면 전달 (예: '서울' 등)
                         region: '',
                         key: UniqueKey(),
                       ),
@@ -306,19 +305,44 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.green.shade600,
-        child: const Icon(Icons.add),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CommunityNewThingsPage(
-                userId: widget.userId,
-                nickname: widget.nickname,
-              ),
-            ),
-          );
+      floatingActionButton: Builder(
+        builder: (context) {
+          if (_tabController.index == 3) {
+            // 챌린지 탭
+            return FloatingActionButton(
+              backgroundColor: Colors.green.shade600,
+              child: const Icon(Icons.add),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CommunityMakeChallengePage(
+                      userId: widget.userId,
+                      nickname: widget.nickname,
+                      region: '',
+                    ),
+                  ),
+                );
+              },
+            );
+          } else {
+            // 나머지 탭(전체/인기/지역)
+            return FloatingActionButton(
+              backgroundColor: Colors.green.shade600,
+              child: const Icon(Icons.add),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CommunityNewThingsPage(
+                      userId: widget.userId,
+                      nickname: widget.nickname,
+                    ),
+                  ),
+                );
+              },
+            );
+          }
         },
       ),
     );
