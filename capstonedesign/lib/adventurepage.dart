@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 class AdventurePage extends StatefulWidget {
   @override
@@ -8,8 +9,8 @@ class AdventurePage extends StatefulWidget {
 class _AdventurePageState extends State<AdventurePage> {
   bool hasMonster = true;
   bool inBattle = false;
-  double playerHp = 0.75;
-  double monsterHp = 0.5;
+  int playerHp = 3;
+  int monsterHp = 3;
 
   void startBattle() {
     setState(() {
@@ -55,7 +56,6 @@ class _AdventurePageState extends State<AdventurePage> {
   Widget buildBattleView() {
     return Stack(
       children: [
-        // 배경 이미지
         Positioned.fill(
           child: Image.asset(
             'assets/images/battle_background.png',
@@ -63,14 +63,13 @@ class _AdventurePageState extends State<AdventurePage> {
           ),
         ),
 
-        // 몬스터 체력바 + 이미지
         Positioned(
           top: 30,
           right: 30,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              buildHpBar(monsterHp, label: '쓰레기 몬스터'),
+              buildHpBar(monsterHp / 3, label: '쓰레기 몬스터'),
               SizedBox(height: 10),
               Image.asset(
                 'assets/images/trash_monster.png',
@@ -81,14 +80,13 @@ class _AdventurePageState extends State<AdventurePage> {
           ),
         ),
 
-        // 강아지 체력바 + 이미지
         Positioned(
           bottom: 180,
           left: 20,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              buildHpBar(playerHp, label: '내 강아지'),
+              buildHpBar(playerHp / 3, label: '내 강아지'),
               SizedBox(height: 10),
               Image.asset(
                 'assets/images/dog_stage1.gif',
@@ -99,7 +97,6 @@ class _AdventurePageState extends State<AdventurePage> {
           ),
         ),
 
-        // 명령 버튼 UI
         Align(
           alignment: Alignment.bottomCenter,
           child: Padding(
@@ -110,7 +107,10 @@ class _AdventurePageState extends State<AdventurePage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    ElevatedButton(onPressed: () {}, child: Text('FIGHT')),
+                    ElevatedButton(
+                      onPressed: () => startTapChallenge(),
+                      child: Text('FIGHT'),
+                    ),
                     ElevatedButton(onPressed: () {}, child: Text('BAG')),
                   ],
                 ),
@@ -128,6 +128,67 @@ class _AdventurePageState extends State<AdventurePage> {
         ),
       ],
     );
+  }
+
+  void startTapChallenge() {
+    int tapCount = 0;
+    bool challengeEnded = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        Timer(Duration(seconds: 3), () {
+          if (!challengeEnded) {
+            challengeEnded = true;
+            Navigator.pop(context);
+            resolveTapChallenge(tapCount);
+          }
+        });
+
+        return AlertDialog(
+          title: Text('빠르게 눌러라!'),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('3초 안에 15번 눌러야 합니다!'),
+                  Text('현재: $tapCount'),
+                  SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        tapCount++;
+                      });
+                    },
+                    child: Text('눌러!'),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  void resolveTapChallenge(int tapCount) {
+    setState(() {
+      if (tapCount >= 15) {
+        monsterHp = (monsterHp - 1).clamp(0, 3);
+      } else {
+        playerHp = (playerHp - 1).clamp(0, 3);
+      }
+
+      if (monsterHp <= 0) {
+        hasMonster = false;
+        inBattle = false;
+      } else if (playerHp <= 0) {
+        inBattle = false;
+        hasMonster = false;
+      }
+    });
   }
 
   Widget buildHpBar(double hp, {required String label}) {
