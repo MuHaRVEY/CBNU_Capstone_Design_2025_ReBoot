@@ -81,6 +81,17 @@ flutter:
     - assets/images/stage5.png
     - assets/images/trash_monster.png
     - assets/images/battle_background.png
+    - assets/images/t1.png
+    - assets/images/t2.png
+    - assets/images/t3.png
+    - assets/images/t4.png
+    - assets/images/t5.png
+    - assets/images/t6.png
+    - assets/images/t7.png
+    - assets/images/t8.png
+    - assets/images/t9.png
+    - assets/images/t10.png
+
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
