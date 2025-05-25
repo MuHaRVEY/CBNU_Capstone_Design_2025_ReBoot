@@ -33,9 +33,11 @@ class _AdventurePageState extends State<AdventurePage> {
     available.shuffle(random);
     final selected = available.take(3).toList();
 
+    final screenWidth = MediaQuery.of(context).size.width;
+
     List<Widget> newTrash = [];
     for (var path in selected) {
-      final left = random.nextDouble() * MediaQuery.of(context).size.width * 0.8;
+      final left = random.nextDouble() * (screenWidth - 60);
       newTrash.add(_createFallingTrash(path, left));
     }
 
@@ -46,11 +48,12 @@ class _AdventurePageState extends State<AdventurePage> {
 
   Widget _createFallingTrash(String path, double left) {
     return TweenAnimationBuilder(
-      tween: Tween<Offset>(begin: Offset(0, -1), end: Offset(0, 1.2)),
-      duration: Duration(seconds: 2),
-      builder: (context, Offset offset, child) {
+      tween: Tween<double>(begin: -100, end: 350), // 떨어지는 위치
+      duration: Duration(milliseconds: 800),
+      curve: Curves.easeInOut,
+      builder: (context, value, child) {
         return Positioned(
-          top: MediaQuery.of(context).size.height * offset.dy,
+          top: value,
           left: left,
           child: child!,
         );
@@ -144,8 +147,12 @@ class _AdventurePageState extends State<AdventurePage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    ElevatedButton(onPressed: () => startTapChallenge(), child: Text('FIGHT1')),
-                    ElevatedButton(onPressed: () => startTrashDropChallenge(), child: Text('FIGHT2')),
+                    ElevatedButton(
+                        onPressed: () => startTapChallenge(),
+                        child: Text('FIGHT1')),
+                    ElevatedButton(
+                        onPressed: () => startTrashDropChallenge(),
+                        child: Text('FIGHT2')),
                   ],
                 ),
                 SizedBox(height: 10),
@@ -239,7 +246,9 @@ class _AdventurePageState extends State<AdventurePage> {
             widthFactor: hp.clamp(0.0, 1.0),
             child: Container(
               decoration: BoxDecoration(
-                color: hp > 0.5 ? Colors.green : (hp > 0.2 ? Colors.orange : Colors.red),
+                color: hp > 0.5
+                    ? Colors.green
+                    : (hp > 0.2 ? Colors.orange : Colors.red),
                 borderRadius: BorderRadius.circular(5),
               ),
             ),
