@@ -59,6 +59,14 @@ flutter:
     - assets/images/image_app_homepage.png
     - assets/images/image_app_start.png
     - assets/images/image_plogging_sample.jpg
+    - assets/images/dog_stage1.gif
+    - assets/images/stage1.png
+    - assets/images/stage2.png
+    - assets/images/stage3.png
+    - assets/images/stage4.png
+    - assets/images/stage5.png
+    - assets/images/trash_monster.png
+    - assets/images/battle_background.png
 
 
   # The following line ensures that the Material Icons font is

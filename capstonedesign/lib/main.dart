@@ -1,3 +1,4 @@
+import 'package:capstonedesign/gamepage.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart'; // Firebase Core import
 import 'firebase_options.dart'; // flutterfire configure로 생성된 파일
@@ -19,7 +20,8 @@ class RebootApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Re:Boot',
-      home: FirstPage(), // 첫 페이지
+      // home: FirstPage(), // 첫 페이지
+      home: GamePage(),
       debugShowCheckedModeBanner: false,
     );
   }
