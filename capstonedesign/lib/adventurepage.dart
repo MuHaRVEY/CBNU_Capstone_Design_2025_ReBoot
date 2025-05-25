@@ -12,7 +12,7 @@ class _AdventurePageState extends State<AdventurePage> {
   bool inBattle = false;
   int playerHp = 3;
   int monsterHp = 3;
-  List<String> trashImages = [];
+  List<Widget> fallingTrash = [];
 
   void startBattle() {
     setState(() {
@@ -27,11 +27,36 @@ class _AdventurePageState extends State<AdventurePage> {
     });
   }
 
-  void generateRandomTrash() {
+  void startTrashDropChallenge() {
     final random = Random();
     final available = List.generate(10, (index) => 'assets/images/t${index + 1}.png');
     available.shuffle(random);
-    trashImages = available.take(3).toList();
+    final selected = available.take(3).toList();
+
+    List<Widget> newTrash = [];
+    for (var path in selected) {
+      final left = random.nextDouble() * MediaQuery.of(context).size.width * 0.8;
+      newTrash.add(_createFallingTrash(path, left));
+    }
+
+    setState(() {
+      fallingTrash = newTrash;
+    });
+  }
+
+  Widget _createFallingTrash(String path, double left) {
+    return TweenAnimationBuilder(
+      tween: Tween<Offset>(begin: Offset(0, -1), end: Offset(0, 1.2)),
+      duration: Duration(seconds: 2),
+      builder: (context, Offset offset, child) {
+        return Positioned(
+          top: MediaQuery.of(context).size.height * offset.dy,
+          left: left,
+          child: child!,
+        );
+      },
+      child: Image.asset(path, width: 60),
+    );
   }
 
   @override
@@ -106,6 +131,9 @@ class _AdventurePageState extends State<AdventurePage> {
           ),
         ),
 
+        // falling trash
+        ...fallingTrash,
+
         Align(
           alignment: Alignment.bottomCenter,
           child: Padding(
@@ -117,30 +145,7 @@ class _AdventurePageState extends State<AdventurePage> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     ElevatedButton(onPressed: () => startTapChallenge(), child: Text('FIGHT1')),
-                    ElevatedButton(onPressed: () {
-                      generateRandomTrash();
-                      showDialog(
-                        context: context,
-                        builder: (context) {
-                          return AlertDialog(
-                            title: Text('패턴 2: 쓰레기 분류'),
-                            content: SizedBox(
-                              height: 150,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: trashImages.map((img) => Image.asset(img, width: 60)).toList(),
-                              ),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: Text('닫기'),
-                              )
-                            ],
-                          );
-                        },
-                      );
-                    }, child: Text('FIGHT2')),
+                    ElevatedButton(onPressed: () => startTrashDropChallenge(), child: Text('FIGHT2')),
                   ],
                 ),
                 SizedBox(height: 10),
