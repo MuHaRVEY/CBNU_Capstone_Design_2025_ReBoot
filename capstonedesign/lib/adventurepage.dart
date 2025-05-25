@@ -8,6 +8,8 @@ class AdventurePage extends StatefulWidget {
 class _AdventurePageState extends State<AdventurePage> {
   bool hasMonster = true;
   bool inBattle = false;
+  double playerHp = 0.75;
+  double monsterHp = 0.5;
 
   void startBattle() {
     setState(() {
@@ -61,25 +63,39 @@ class _AdventurePageState extends State<AdventurePage> {
           ),
         ),
 
-        // 몬스터 (오른쪽 상단)
+        // 몬스터 체력바 + 이미지
         Positioned(
-          top: 50,
+          top: 30,
           right: 30,
-          child: Image.asset(
-            'assets/images/trash_monster.png',
-            width: 140,
-            height: 140,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              buildHpBar(monsterHp, label: '쓰레기 몬스터'),
+              SizedBox(height: 10),
+              Image.asset(
+                'assets/images/trash_monster.png',
+                width: 140,
+                height: 140,
+              ),
+            ],
           ),
         ),
 
-        // 강아지 (왼쪽 하단)
+        // 강아지 체력바 + 이미지
         Positioned(
-          bottom: 100,
+          bottom: 180,
           left: 20,
-          child: Image.asset(
-            'assets/images/dog_stage1.gif',
-            width: 160,
-            height: 160,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              buildHpBar(playerHp, label: '내 강아지'),
+              SizedBox(height: 10),
+              Image.asset(
+                'assets/images/dog_stage1.gif',
+                width: 160,
+                height: 160,
+              ),
+            ],
           ),
         ),
 
@@ -107,6 +123,33 @@ class _AdventurePageState extends State<AdventurePage> {
                   ],
                 ),
               ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildHpBar(double hp, {required String label}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontWeight: FontWeight.bold)),
+        Container(
+          width: 120,
+          height: 10,
+          decoration: BoxDecoration(
+            color: Colors.red[200],
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: hp.clamp(0.0, 1.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: hp > 0.5 ? Colors.green : (hp > 0.2 ? Colors.orange : Colors.red),
+                borderRadius: BorderRadius.circular(5),
+              ),
             ),
           ),
         ),
