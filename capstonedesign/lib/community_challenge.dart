@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'community_makechallenge.dart';
+import 'community_challenge_detail.dart'; // 상세페이지 import 추가
 
 class CommunityChallengePage extends StatefulWidget {
   final String userId;
@@ -19,53 +20,6 @@ class CommunityChallengePage extends StatefulWidget {
 }
 
 class _CommunityChallengePageState extends State<CommunityChallengePage> {
-
-  void _showJoinDialog(BuildContext context, String challengeName) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('챌린지 참가'),
-        content: Text('$challengeName에 참가하시겠습니까?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('아니오'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-
-              // --- [1] DB에 참가 챌린지 추가 ---
-              final userRef = FirebaseDatabase.instance.ref('users/${widget.userId}/currentChallenges');
-              final snapshot = await userRef.get();
-
-              List<dynamic> existing = [];
-              if (snapshot.exists && snapshot.value != null) {
-                if (snapshot.value is List) {
-                  existing = snapshot.value as List;
-                } else if (snapshot.value is Map) {
-                  existing = (snapshot.value as Map).values.toList();
-                }
-              }
-
-              // 중복 방지
-              if (!existing.contains(challengeName)) {
-                existing.add(challengeName);
-                await userRef.set(existing);
-              }
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$challengeName에 참가하셨습니다!')),
-              );
-              print('[userId: ${widget.userId}, nickname: ${widget.nickname}] $challengeName 참가!');
-            },
-            child: const Text('참가'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _goToMakeChallenge() async {
     await Navigator.push(
       context,
@@ -108,8 +62,9 @@ class _CommunityChallengePageState extends State<CommunityChallengePage> {
                   padding: const EdgeInsets.all(16),
                   itemCount: challengeList.length,
                   itemBuilder: (context, index) {
+                    final challengeId = challengeList[index].key.toString();
                     final challenge = Map<String, dynamic>.from(challengeList[index].value);
-                    final challengeName = challenge['name'] ?? '';
+
                     return Card(
                       color: Colors.white.withOpacity(0.95),
                       shape: RoundedRectangleBorder(
@@ -118,12 +73,25 @@ class _CommunityChallengePageState extends State<CommunityChallengePage> {
                       margin: const EdgeInsets.only(bottom: 16),
                       child: ListTile(
                         title: Text(
-                          challengeName,
+                          challenge['name'] ?? '',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                         subtitle: Text(challenge['description'] ?? ''),
                         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                        onTap: () => _showJoinDialog(context, challengeName),
+                        // 상세페이지로 이동만!
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CommunityChallengeDetailPage(
+                                challengeId: challengeId,
+                                challenge: challenge,
+                                userId: widget.userId,
+                                nickname: widget.nickname,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     );
                   },
