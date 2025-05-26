@@ -12,7 +12,10 @@ class _AdventurePageState extends State<AdventurePage> {
   bool inBattle = false;
   int playerHp = 3;
   int monsterHp = 3;
-  List<Widget> fallingTrash = [];
+  List<String> trashList = [];
+  List<Widget> trashWidgets = [];
+  String? binTag = 'general';
+  bool binDropped = false;
 
   void startBattle() {
     setState(() {
@@ -30,29 +33,28 @@ class _AdventurePageState extends State<AdventurePage> {
   void startTrashDropChallenge() {
     final random = Random();
     final available = List.generate(10, (index) => 'assets/images/t${index + 1}.png');
-    available.shuffle(random);
+    available.shuffle();
     final selected = available.take(3).toList();
-
     final screenWidth = MediaQuery.of(context).size.width;
 
-    List<Widget> newTrash = [];
+    trashList = List.from(selected);
+    List<Widget> generated = [];
 
-    // 쓰레기 3개
+    // 쓰레기 드래그 위젯들
     for (var path in selected) {
       final left = random.nextDouble() * (screenWidth - 60);
-      newTrash.add(_createFallingItem(path, left, 60));
+      generated.add(_createAnimatedTrash(path, left));
     }
 
-    // 쓰레기통 1개 (가운데 아래에 고정된 듯 떨어지도록)
-    final binLeft = (screenWidth - 100) / 2;
-    newTrash.add(_createFallingItem('assets/images/trashbin.png', binLeft, 100));
+    // 쓰레기통 드래그 타겟
+    generated.add(_createAnimatedBin((screenWidth - 100) / 2));
 
     setState(() {
-      fallingTrash = newTrash;
+      trashWidgets = generated;
     });
   }
 
-  Widget _createFallingItem(String path, double left, double size) {
+  Widget _createAnimatedTrash(String path, double left) {
     return TweenAnimationBuilder(
       tween: Tween<double>(begin: -100, end: 350),
       duration: Duration(milliseconds: 800),
@@ -64,7 +66,58 @@ class _AdventurePageState extends State<AdventurePage> {
           child: child!,
         );
       },
-      child: Image.asset(path, width: size),
+      child: Draggable<String>(
+        data: path,
+        feedback: Image.asset(path, width: 60),
+        childWhenDragging: Opacity(opacity: 0.3, child: Image.asset(path, width: 60)),
+        child: Image.asset(path, width: 60),
+      ),
+    );
+  }
+
+  Widget _createAnimatedBin(double left) {
+    return TweenAnimationBuilder(
+      tween: Tween<double>(begin: -120, end: 380),
+      duration: Duration(milliseconds: 800),
+      curve: Curves.easeInOut,
+      builder: (context, value, child) {
+        return Positioned(
+          top: value,
+          left: left,
+          child: DragTarget<String>(
+            onWillAccept: (data) => true,
+            onAccept: (data) {
+              setState(() {
+                trashList.remove(data);
+
+                // 삭제된 쓰레기를 제외한 위젯들 다시 만들기
+                final screenWidth = MediaQuery.of(context).size.width;
+                List<Widget> updated = [];
+
+                for (var path in trashList) {
+                  final left = Random().nextDouble() * (screenWidth - 60);
+                  updated.add(_createAnimatedTrash(path, left));
+                }
+
+                updated.add(_createAnimatedBin((screenWidth - 100) / 2));
+                trashWidgets = updated;
+
+                // 쓰레기를 전부 넣었을 경우 처리
+                if (trashList.isEmpty) {
+                  monsterHp = (monsterHp - 1).clamp(0, 3);
+                  if (monsterHp <= 0) {
+                    hasMonster = false;
+                    inBattle = false;
+                  }
+                }
+              });
+            },
+            builder: (context, candidateData, rejectedData) {
+              return Image.asset('assets/images/trashbin.png', width: 100);
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -97,6 +150,8 @@ class _AdventurePageState extends State<AdventurePage> {
   }
 
   Widget buildBattleView() {
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Stack(
       children: [
         Positioned.fill(
@@ -141,7 +196,7 @@ class _AdventurePageState extends State<AdventurePage> {
         ),
 
         // falling trash and bin
-        ...fallingTrash,
+        ...trashWidgets,
 
         Align(
           alignment: Alignment.bottomCenter,
