@@ -6,6 +6,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'community_detail.dart';
+import 'community_challenge_detail.dart';
 
 class MyPage extends StatefulWidget {
   final String userId;
@@ -200,7 +201,64 @@ class _MyPageState extends State<MyPage> {
 
   Widget _verticalDivider() => Container(height: 30, width: 1, color: Colors.grey.shade400);
 
-  Widget _buildChallengeDropdown() => _buildDropdown('진행중인 챌린지', currentChallenges, Icons.flag);
+  Widget _buildChallengeDropdown() {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ExpansionTile(
+        title: const Text('진행중인 챌린지', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        children: [
+          FutureBuilder<DataSnapshot>(
+            future: FirebaseDatabase.instance.ref('challenges').get(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const ListTile(title: Text('불러오는 중...'));
+              }
+              if (!snapshot.hasData || snapshot.data!.value == null) {
+                return const ListTile(title: Text('진행중인 챌린지가 없습니다.'));
+              }
+              final data = snapshot.data!.value as Map<dynamic, dynamic>;
+              final List<Widget> challengeTiles = [];
+              data.forEach((key, value) {
+                final challenge = Map<String, dynamic>.from(value);
+                final challengeName = challenge['name'] ?? '';
+                if (currentChallenges.contains(challengeName)) {
+                  challengeTiles.add(
+                    ListTile(
+                      leading: const Icon(Icons.flag),
+                      title: Text(challengeName, style: const TextStyle(fontSize: 14)),
+                      subtitle: Text(challenge['description'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CommunityChallengeDetailPage(
+                              challengeId: key.toString(),
+                              challenge: challenge,
+                              userId: widget.userId,
+                              nickname: widget.nickname,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                }
+              });
+              if (challengeTiles.isEmpty) {
+                return const ListTile(title: Text('진행중인 챌린지가 없습니다.'));
+              }
+              return Column(children: challengeTiles);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildMyPostsDropdown() {
     return Container(
