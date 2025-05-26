@@ -91,6 +91,7 @@ flutter:
     - assets/images/t8.png
     - assets/images/t9.png
     - assets/images/t10.png
+    - assets/images/trashbin.png
 
 
   # The following line ensures that the Material Icons font is

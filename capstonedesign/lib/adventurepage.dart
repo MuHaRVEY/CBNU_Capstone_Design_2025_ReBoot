@@ -36,19 +36,25 @@ class _AdventurePageState extends State<AdventurePage> {
     final screenWidth = MediaQuery.of(context).size.width;
 
     List<Widget> newTrash = [];
+
+    // 쓰레기 3개
     for (var path in selected) {
       final left = random.nextDouble() * (screenWidth - 60);
-      newTrash.add(_createFallingTrash(path, left));
+      newTrash.add(_createFallingItem(path, left, 60));
     }
+
+    // 쓰레기통 1개 (가운데 아래에 고정된 듯 떨어지도록)
+    final binLeft = (screenWidth - 100) / 2;
+    newTrash.add(_createFallingItem('assets/images/trashbin.png', binLeft, 100));
 
     setState(() {
       fallingTrash = newTrash;
     });
   }
 
-  Widget _createFallingTrash(String path, double left) {
+  Widget _createFallingItem(String path, double left, double size) {
     return TweenAnimationBuilder(
-      tween: Tween<double>(begin: -100, end: 350), // 떨어지는 위치
+      tween: Tween<double>(begin: -100, end: 350),
       duration: Duration(milliseconds: 800),
       curve: Curves.easeInOut,
       builder: (context, value, child) {
@@ -58,7 +64,7 @@ class _AdventurePageState extends State<AdventurePage> {
           child: child!,
         );
       },
-      child: Image.asset(path, width: 60),
+      child: Image.asset(path, width: size),
     );
   }
 
@@ -134,7 +140,7 @@ class _AdventurePageState extends State<AdventurePage> {
           ),
         ),
 
-        // falling trash
+        // falling trash and bin
         ...fallingTrash,
 
         Align(
