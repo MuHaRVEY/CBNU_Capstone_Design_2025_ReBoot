@@ -32,6 +32,7 @@ dependencies:
     sdk: flutter
 
   # Firebase core services
+
   firebase_core: ^2.32.0
   firebase_auth: ^4.17.4
   firebase_database: ^10.4.0

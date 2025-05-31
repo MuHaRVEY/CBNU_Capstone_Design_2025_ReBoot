@@ -15,6 +15,59 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
   String _searchText = '';
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref('community_posts');
 
+  String _formatDate(String? isoDate) {
+    if (isoDate == null || isoDate.isEmpty) return '';
+    final date = DateTime.tryParse(isoDate);
+    if (date == null) return '';
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
+        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildLikeAndCommentCounts(String postId) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 좋아요 수
+        StreamBuilder<DatabaseEvent>(
+          stream: FirebaseDatabase.instance.ref('likes/$postId').onValue,
+          builder: (context, snapshot) {
+            int likeCount = 0;
+            if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+              final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>?;
+              likeCount = data?.length ?? 0;
+            }
+            return Row(
+              children: [
+                const Icon(Icons.favorite, size: 14, color: Colors.red),
+                const SizedBox(width: 2),
+                Text('$likeCount', style: const TextStyle(fontSize: 12)),
+                const SizedBox(width: 10),
+              ],
+            );
+          },
+        ),
+        // 댓글 수
+        StreamBuilder<DatabaseEvent>(
+          stream: FirebaseDatabase.instance.ref('commentsDetail/$postId').onValue,
+          builder: (context, snapshot) {
+            int commentCount = 0;
+            if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+              final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>?;
+              commentCount = data?.length ?? 0;
+            }
+            return Row(
+              children: [
+                const Icon(Icons.chat_bubble_outline, size: 14, color: Colors.grey),
+                const SizedBox(width: 2),
+                Text('$commentCount', style: const TextStyle(fontSize: 12)),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -35,7 +88,7 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
             ),
             onChanged: (value) {
               setState(() {
-                _searchText = value;
+                _searchText = value.trim();
               });
             },
           ),
@@ -44,27 +97,38 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
           child: StreamBuilder<DatabaseEvent>(
             stream: _dbRef.onValue,
             builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
               if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
                 return const Center(child: Text('게시물이 없습니다.'));
               }
 
-              final entries = snapshot.data!.snapshot.children.where((entry) {
-                final post = entry.value as Map;
-                return post['region']?.toString().toLowerCase().contains(_searchText.toLowerCase()) ?? false;
+              final postList = snapshot.data!.snapshot.children.toList();
+
+              // 지역명 필터링(포함 검색)
+              final filteredPosts = postList.where((post) {
+                final data = Map<String, dynamic>.from(post.value as Map);
+                if (_searchText.isEmpty) return true;
+                final region = (data['region'] ?? '').toString();
+                return region.contains(_searchText);
               }).toList();
 
-              entries.sort((a, b) {
-                final timeA = (a.value as Map)['time']?.toString() ?? '';
-                final timeB = (b.value as Map)['time']?.toString() ?? '';
-                return timeB.compareTo(timeA);
+              // 최신순
+              filteredPosts.sort((a, b) {
+                final aMap = Map<String, dynamic>.from(a.value as Map);
+                final bMap = Map<String, dynamic>.from(b.value as Map);
+                final aCreated = aMap['createdAt'] ?? '';
+                final bCreated = bMap['createdAt'] ?? '';
+                return bCreated.compareTo(aCreated);
               });
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: entries.length,
+                padding: const EdgeInsets.all(16),
+                itemCount: filteredPosts.length,
                 itemBuilder: (context, index) {
-                  final post = entries[index];
-                  final data = post.value as Map;
+                  final post = filteredPosts[index];
+                  final data = Map<String, dynamic>.from(post.value as Map);
 
                   return GestureDetector(
                     onTap: () => widget.onTapPost(post),
@@ -90,32 +154,56 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(data['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      Text(
+                                        data['title'] ?? '',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                      ),
                                       const SizedBox(height: 4),
                                       Row(
                                         children: [
-                                          Text('${data['time']} · ${data['region']}',
-                                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                          // 작성자
+                                          if (data['nickname'] != null && data['nickname'].toString().isNotEmpty)
+                                            Text('${data['nickname']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                          // 날짜
+                                          if (data['createdAt'] != null && data['createdAt'].toString().isNotEmpty)
+                                            ...[
+                                              const SizedBox(width: 10),
+                                              Text(_formatDate(data['createdAt']), style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                            ],
+                                          // 지역
+                                          if (data['region'] != null && data['region'].toString().isNotEmpty)
+                                            ...[
+                                              const SizedBox(width: 10),
+                                              Text('${data['region']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                            ],
                                           const Spacer(),
-                                          Icon(Icons.favorite, size: 14, color: Colors.red.shade400),
-                                          const SizedBox(width: 4),
-                                          Text('${data['likes'] ?? 0}'),
-                                          const SizedBox(width: 12),
-                                          const Icon(Icons.chat_bubble_outline, size: 14),
-                                          const SizedBox(width: 4),
-                                          Text('${data['comments'] ?? 0}'),
+                                          _buildLikeAndCommentCounts(post.key!),
                                         ],
-                                      )
+                                      ),
                                     ],
                                   ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 10),
-                            if ((data['imagePath'] ?? '').isNotEmpty)
+                            // 이미지
+                            if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty)
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
-                                child: Image.network(data['imagePath'], fit: BoxFit.cover),
+                                child: Image.network(
+                                  data['imageUrl'],
+                                  fit: BoxFit.cover,
+                                  height: 160,
+                                  width: double.infinity,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(Icons.broken_image, size: 80),
+                                ),
+                              ),
+                            // 내용
+                            if (data['content'] != null && data['content'].toString().isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 10),
+                                child: Text(data['content'], style: const TextStyle(fontSize: 14)),
                               ),
                           ],
                         ),
