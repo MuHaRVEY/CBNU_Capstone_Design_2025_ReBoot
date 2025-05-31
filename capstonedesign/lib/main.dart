@@ -1,3 +1,4 @@
+import 'package:capstonedesign/gamepage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart'; // Firebase Core import
@@ -25,6 +26,7 @@ class RebootApp extends StatelessWidget {
     return MaterialApp(
       title: 'Re:Boot',
       home: FirstPage(), // 첫 페이지
+      // home: GamePage(), // 게임 페이지 테스트용
       debugShowCheckedModeBanner: false,
     );
   }
