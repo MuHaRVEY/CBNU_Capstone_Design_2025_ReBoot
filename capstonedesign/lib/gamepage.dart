@@ -22,10 +22,10 @@ class _GamePageState extends State<GamePage> {
   // 반려동물 상태 이미지 리스트
   final List<String> petImages = [
     'assets/images/dog_stage1.gif',
-    'assets/images/dog_stage1.gif',
-    'assets/images/dog_stage1.gif',
-    'assets/images/dog_stage1.gif',
-    'assets/images/dog_stage1.gif',
+    'assets/images/dog_stage2.png',
+    'assets/images/dog_stage3.png',
+    'assets/images/dog_stage4.png',
+    'assets/images/dog_stage5.png',
   ];
 
   void updateGameState() {
