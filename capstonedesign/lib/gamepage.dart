@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'adventurepage.dart'; // 모험 페이지 임포트 추가
+import 'adventurepage.dart'; // 수정된 AdventurePage를 import
 
 class GamePage extends StatefulWidget {
   @override
@@ -7,10 +7,9 @@ class GamePage extends StatefulWidget {
 }
 
 class _GamePageState extends State<GamePage> {
-  int stageLevel = 1; // 1 to 5
-  int petState = 1; // 1 to 5
+  int stageLevel = 1;
+  int petState = 1;
 
-  // 배경 이미지 리스트
   final List<String> backgroundImages = [
     'assets/images/stage1.png',
     'assets/images/stage2.png',
@@ -19,7 +18,6 @@ class _GamePageState extends State<GamePage> {
     'assets/images/stage5.png',
   ];
 
-  // 반려동물 상태 이미지 리스트
   final List<String> petImages = [
     'assets/images/dog_stage1.gif',
     'assets/images/dog_stage2.png',
@@ -40,27 +38,22 @@ class _GamePageState extends State<GamePage> {
     return Scaffold(
       body: Stack(
         children: [
-          // 배경 이미지
           Positioned.fill(
             child: Image.asset(
               backgroundImages[stageLevel - 1],
               fit: BoxFit.cover,
             ),
           ),
-
-          // 반려동물 캐릭터 (화면 하단 중앙 근처로 위치 조정)
           Align(
-            alignment: Alignment(0, 0.8), // 버튼 위쪽에 위치
+            alignment: Alignment(0, 0.8),
             child: Image.asset(
               petImages[petState - 1],
-              width: 300, // 크기 증가
+              width: 300,
               height: 300,
             ),
           ),
         ],
       ),
-
-      // 하단 버튼 영역
       bottomNavigationBar: BottomNavigationBar(
         items: [
           BottomNavigationBarItem(
@@ -84,7 +77,9 @@ class _GamePageState extends State<GamePage> {
             case 1:
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => AdventurePage()),
+                MaterialPageRoute(
+                  builder: (context) => AdventurePage(petState: petState),
+                ),
               );
               break;
             case 2:
@@ -93,9 +88,8 @@ class _GamePageState extends State<GamePage> {
           }
         },
       ),
-
       floatingActionButton: FloatingActionButton(
-        onPressed: updateGameState, // 임시 버튼: 플로깅 후 상태 업데이트용
+        onPressed: updateGameState,
         child: Icon(Icons.add),
       ),
     );
