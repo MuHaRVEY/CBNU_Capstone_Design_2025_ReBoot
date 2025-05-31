@@ -33,11 +33,11 @@ dependencies:
 
   # Firebase core services
 
-  firebase_core: ^2.32.0
-  firebase_auth: ^4.17.4
-  firebase_database: ^10.4.0
-  firebase_storage: ^11.7.7
-  cloud_firestore: ^4.17.5
+  firebase_core: ^3.13.1
+  firebase_auth: ^5.5.4
+  firebase_database: ^11.3.6
+  firebase_storage: ^12.4.6
+  cloud_firestore: ^5.6.8
 
   # Media and image handling
   image_picker: ^1.0.7
@@ -47,11 +47,18 @@ dependencies:
   google_sign_in: ^6.0.1
 
   # Internationalization (used for DateFormat)
-  intl: ^0.18.1
+  intl: ^0.20.2
 
   # Cupertino icons for iOS style widgets
   cupertino_icons: ^1.0.8
-
+  google_maps_flutter: ^2.12.1
+  google_maps_flutter_web: ^0.5.12
+  http: ^1.3.0
+  json_serializable: ^6.9.4
+  location: ^8.0.0
+  geolocator: ^14.0.0
+  latlong2: ^0.9.1
+  flutter_polyline_points: ^2.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -62,6 +69,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  build_runner: ^2.4.15
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -69,30 +77,31 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
-    - assets/images/image_firstpage_login.png
-    - assets/images/image_app_homepage.png
-    - assets/images/image_app_start.png
-    - assets/images/image_plogging_sample.jpg
-    - assets/images/image_google_icon.png
-    - assets/images/dog_stage1.gif
-    - assets/images/stage1.png
-    - assets/images/stage2.png
-    - assets/images/stage3.png
-    - assets/images/stage4.png
-    - assets/images/stage5.png
-    - assets/images/trash_monster.png
-    - assets/images/battle_background.png
-    - assets/images/t1.png
-    - assets/images/t2.png
-    - assets/images/t3.png
-    - assets/images/t4.png
-    - assets/images/t5.png
-    - assets/images/t6.png
-    - assets/images/t7.png
-    - assets/images/t8.png
-    - assets/images/t9.png
-    - assets/images/t10.png
-    - assets/images/trashbin.png
+    - assets/images/
+#    - assets/images/image_firstpage_login.png
+#    - assets/images/image_app_homepage.png
+#    - assets/images/image_app_start.png
+#    - assets/images/image_plogging_sample.jpg
+#    - assets/images/image_google_icon.png
+#    - assets/images/dog_stage1.gif
+#    - assets/images/stage1.png
+#    - assets/images/stage2.png
+#    - assets/images/stage3.png
+#    - assets/images/stage4.png
+#    - assets/images/stage5.png
+#    - assets/images/trash_monster.png
+#    - assets/images/battle_background.png
+#    - assets/images/t1.png
+#    - assets/images/t2.png
+#    - assets/images/t3.png
+#    - assets/images/t4.png
+#    - assets/images/t5.png
+#    - assets/images/t6.png
+#    - assets/images/t7.png
+#    - assets/images/t8.png
+#    - assets/images/t9.png
+#    - assets/images/t10.png
+#    - assets/images/trashbin.png
 
 
   # The following line ensures that the Material Icons font is
