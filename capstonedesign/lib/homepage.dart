@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'my_page.dart';
 import 'community_entire.dart';
 import 'gamepage.dart'; // gmepage import 추가
+import 'gpt_map.dart';
 
 class HomePage extends StatelessWidget {
   final String userId;
@@ -76,7 +77,12 @@ class HomePage extends StatelessWidget {
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
                       onPressed: () {
-                        // 플로깅 이동 (추후 구현)
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => PolylineMapScreen(),
+                          ),
+                        );
                       },
                       icon: const Icon(Icons.map_outlined),
                       label: const Text('플로깅'),
