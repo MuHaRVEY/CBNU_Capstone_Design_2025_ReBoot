@@ -4,20 +4,11 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:http/http.dart' as http;
 import 'package:location/location.dart';
 import 'dart:convert';
-
-void main() => runApp(PolylineMapApp());
-
-class PolylineMapApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Polyline on Google Maps',
-      home: PolylineMapScreen(),
-    );
-  }
-}
+import 'navigator.dart';
 
 class PolylineMapScreen extends StatefulWidget {
+  const PolylineMapScreen({super.key});
+
   @override
   _PolylineMapScreenState createState() => _PolylineMapScreenState();
 }
@@ -118,6 +109,12 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
             );
           }
         });
+        Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NavigationScreen(routePoints: polylineCoordinates, initialRadius: radius,),
+      ),
+    );
       } else {
         print('API 요청 실패: ${response.statusCode}');
       }
