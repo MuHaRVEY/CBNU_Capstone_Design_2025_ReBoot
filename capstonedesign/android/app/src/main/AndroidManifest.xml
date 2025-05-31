@@ -7,7 +7,7 @@
 
         <!-- TODO: Add your Google Maps API key here -->
         <meta-data android:name="com.google.android.geo.API_KEY"
-            android:value="APIKEY"/>
+            android:value="AIzaSyCgzHEHy80WK3_IfYMunfJ_e7LciCASfKY"/>
 
         <activity
             android:name=".MainActivity"
@@ -51,4 +51,5 @@
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 </manifest>
