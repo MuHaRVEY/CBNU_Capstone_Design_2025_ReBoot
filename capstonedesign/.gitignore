@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# ✅ Firebase 설정 파일 무시
+lib/firebase_options.dart

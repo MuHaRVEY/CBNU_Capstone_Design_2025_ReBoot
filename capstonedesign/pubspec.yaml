@@ -31,8 +31,25 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
+  # Firebase core services
+
+  firebase_core: ^2.32.0
+  firebase_auth: ^4.17.4
+  firebase_database: ^10.4.0
+  firebase_storage: ^11.7.7
+  cloud_firestore: ^4.17.5
+
+  # Media and image handling
+  image_picker: ^1.0.7
+
+
+  # Google sign-in support
+  google_sign_in: ^6.0.1
+
+  # Internationalization (used for DateFormat)
+  intl: ^0.18.1
+
+  # Cupertino icons for iOS style widgets
   cupertino_icons: ^1.0.8
   google_maps_flutter: ^2.12.1
   google_maps_flutter_web: ^0.5.12
@@ -60,8 +77,30 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
-    - assets/images/image_app_start.png
     - assets/images/image_firstpage_login.png
+    - assets/images/image_app_homepage.png
+    - assets/images/image_app_start.png
+    - assets/images/image_plogging_sample.jpg
+    - assets/images/image_google_icon.png
+    - assets/images/dog_stage1.gif
+    - assets/images/stage1.png
+    - assets/images/stage2.png
+    - assets/images/stage3.png
+    - assets/images/stage4.png
+    - assets/images/stage5.png
+    - assets/images/trash_monster.png
+    - assets/images/battle_background.png
+    - assets/images/t1.png
+    - assets/images/t2.png
+    - assets/images/t3.png
+    - assets/images/t4.png
+    - assets/images/t5.png
+    - assets/images/t6.png
+    - assets/images/t7.png
+    - assets/images/t8.png
+    - assets/images/t9.png
+    - assets/images/t10.png
+    - assets/images/trashbin.png
 
 
   # The following line ensures that the Material Icons font is
