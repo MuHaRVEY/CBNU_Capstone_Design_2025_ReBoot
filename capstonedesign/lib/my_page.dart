@@ -73,6 +73,20 @@ class _MyPageState extends State<MyPage> {
         profileImageUrl = data['profileImageUrl'] ?? '';
       });
     }
+    final postsSnapshot = await FirebaseDatabase.instance.ref('community_posts').get();
+    if (postsSnapshot.exists) {
+      final tempList = <String>[];
+      final posts = postsSnapshot.value as Map;
+      posts.forEach((key, value) {
+        if (value is Map && value['userId'] == widget.userId) {
+          print('내 글 발견: $key / title: ${value['title']}');
+          tempList.add(key);
+        }
+      });
+      setState(() {
+        myPosts = tempList;
+      });
+    }
   }
 
   Future<void> _pickAndUploadImage() async {
@@ -276,10 +290,18 @@ class _MyPageState extends State<MyPage> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const ListTile(title: Text('불러오는 중...'));
               }
+              if (snapshot.hasError) {
+                return ListTile(title: Text('에러: %{snapshot.error}'));
+              } // 현재 게시글 안 불러와지기 때문에 에러처리 시도
               if (!snapshot.hasData || snapshot.data!.value == null) {
                 return const ListTile(title: Text('삭제된 게시글입니다.'));
               }
-              final post = snapshot.data!.value as Map;
+
+              final data = snapshot.data!.value;
+              if (data is! Map) {
+                return const ListTile(title: Text('잘못된 데이터 형식입니다.'));
+              }
+              final post = Map<String, dynamic>.from(data);
               final title = post['title'] ?? '제목 없음';
               return ListTile(
                 leading: const Icon(Icons.article_outlined),
