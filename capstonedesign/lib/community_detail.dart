@@ -19,7 +19,7 @@ class CommunityDetailPage extends StatefulWidget {
 }
 
 class _CommunityDetailPageState extends State<CommunityDetailPage> {
-  final DatabaseReference _dbRef = FirebaseDatabase.instance.reference();
+  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref();
   Map<dynamic, dynamic>? postData;
   List<Map<dynamic, dynamic>> comments = [];
   final TextEditingController _commentController = TextEditingController();
