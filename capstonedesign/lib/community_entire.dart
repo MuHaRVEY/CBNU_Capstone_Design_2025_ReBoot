@@ -27,27 +27,19 @@ class CommunityEntireTab extends StatelessWidget {
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
-  Widget _buildLikeAndCommentCounts(String postId) {
+  Widget _buildLikeAndCommentCounts(Map<String, dynamic> data, String postId) {
+    final likeCount = data['likeCount'] ?? 0;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        FutureBuilder<DataSnapshot>(
-          future: FirebaseDatabase.instance.ref('likes/$postId').get(),
-          builder: (context, snapshot) {
-            int likeCount = 0;
-            if (snapshot.hasData && snapshot.data!.value != null) {
-              final data = snapshot.data!.value as Map<dynamic, dynamic>?;
-              likeCount = data?.length ?? 0;
-            }
-            return Row(
-              children: [
-                const Icon(Icons.favorite, size: 14, color: Colors.red),
-                const SizedBox(width: 2),
-                Text('$likeCount', style: const TextStyle(fontSize: 12)),
-                const SizedBox(width: 10),
-              ],
-            );
-          },
+        Row(
+          children: [
+            const Icon(Icons.favorite, size: 14, color: Colors.red),
+            const SizedBox(width: 2),
+            Text('$likeCount', style: const TextStyle(fontSize: 12)),
+            const SizedBox(width: 10),
+          ],
         ),
         FutureBuilder<DataSnapshot>(
           future: FirebaseDatabase.instance.ref('commentsDetail/$postId').get(),
@@ -69,6 +61,7 @@ class CommunityEntireTab extends StatelessWidget {
       ],
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +127,7 @@ class CommunityEntireTab extends StatelessWidget {
                                         Text('${data['region']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                                       ],
                                     const Spacer(),
-                                    _buildLikeAndCommentCounts(post.key!),
+                                    _buildLikeAndCommentCounts(data, post.key!),
                                   ],
                                 ),
                               ],
