@@ -6,6 +6,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'community_detail.dart';
+import 'community_challenge_detail.dart';
 
 class MyPage extends StatefulWidget {
   final String userId;
@@ -70,6 +71,20 @@ class _MyPageState extends State<MyPage> {
         }
 
         profileImageUrl = data['profileImageUrl'] ?? '';
+      });
+    }
+    final postsSnapshot = await FirebaseDatabase.instance.ref('community_posts').get();
+    if (postsSnapshot.exists) {
+      final tempList = <String>[];
+      final posts = postsSnapshot.value as Map;
+      posts.forEach((key, value) {
+        if (value is Map && value['userId'] == widget.userId) {
+          print('내 글 발견: $key / title: ${value['title']}');
+          tempList.add(key);
+        }
+      });
+      setState(() {
+        myPosts = tempList;
       });
     }
   }
@@ -200,7 +215,64 @@ class _MyPageState extends State<MyPage> {
 
   Widget _verticalDivider() => Container(height: 30, width: 1, color: Colors.grey.shade400);
 
-  Widget _buildChallengeDropdown() => _buildDropdown('진행중인 챌린지', currentChallenges, Icons.flag);
+  Widget _buildChallengeDropdown() {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ExpansionTile(
+        title: const Text('진행중인 챌린지', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        children: [
+          FutureBuilder<DataSnapshot>(
+            future: FirebaseDatabase.instance.ref('challenges').get(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const ListTile(title: Text('불러오는 중...'));
+              }
+              if (!snapshot.hasData || snapshot.data!.value == null) {
+                return const ListTile(title: Text('진행중인 챌린지가 없습니다.'));
+              }
+              final data = snapshot.data!.value as Map<dynamic, dynamic>;
+              final List<Widget> challengeTiles = [];
+              data.forEach((key, value) {
+                final challenge = Map<String, dynamic>.from(value);
+                final challengeName = challenge['name'] ?? '';
+                if (currentChallenges.contains(challengeName)) {
+                  challengeTiles.add(
+                    ListTile(
+                      leading: const Icon(Icons.flag),
+                      title: Text(challengeName, style: const TextStyle(fontSize: 14)),
+                      subtitle: Text(challenge['description'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CommunityChallengeDetailPage(
+                              challengeId: key.toString(),
+                              challenge: challenge,
+                              userId: widget.userId,
+                              nickname: widget.nickname,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                }
+              });
+              if (challengeTiles.isEmpty) {
+                return const ListTile(title: Text('진행중인 챌린지가 없습니다.'));
+              }
+              return Column(children: challengeTiles);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildMyPostsDropdown() {
     return Container(
@@ -218,10 +290,18 @@ class _MyPageState extends State<MyPage> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const ListTile(title: Text('불러오는 중...'));
               }
+              if (snapshot.hasError) {
+                return ListTile(title: Text('에러: %{snapshot.error}'));
+              } // 현재 게시글 안 불러와지기 때문에 에러처리 시도
               if (!snapshot.hasData || snapshot.data!.value == null) {
                 return const ListTile(title: Text('삭제된 게시글입니다.'));
               }
-              final post = snapshot.data!.value as Map;
+
+              final data = snapshot.data!.value;
+              if (data is! Map) {
+                return const ListTile(title: Text('잘못된 데이터 형식입니다.'));
+              }
+              final post = Map<String, dynamic>.from(data);
               final title = post['title'] ?? '제목 없음';
               return ListTile(
                 leading: const Icon(Icons.article_outlined),
