@@ -25,8 +25,8 @@ class RebootApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Re:Boot',
-      // home: FirstPage(), // 첫 페이지
-      home: GamePage(), // 게임 페이지 테스트용
+      home: FirstPage(), // 첫 페이지
+      // home: GamePage(), // 게임 페이지 테스트용
       debugShowCheckedModeBanner: false,
     );
   }
