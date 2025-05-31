@@ -78,30 +78,31 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
-    - assets/images/image_firstpage_login.png
-    - assets/images/image_app_homepage.png
-    - assets/images/image_app_start.png
-    - assets/images/image_plogging_sample.jpg
-    - assets/images/image_google_icon.png
-    - assets/images/dog_stage1.gif
-    - assets/images/stage1.png
-    - assets/images/stage2.png
-    - assets/images/stage3.png
-    - assets/images/stage4.png
-    - assets/images/stage5.png
-    - assets/images/trash_monster.png
-    - assets/images/battle_background.png
-    - assets/images/t1.png
-    - assets/images/t2.png
-    - assets/images/t3.png
-    - assets/images/t4.png
-    - assets/images/t5.png
-    - assets/images/t6.png
-    - assets/images/t7.png
-    - assets/images/t8.png
-    - assets/images/t9.png
-    - assets/images/t10.png
-    - assets/images/trashbin.png
+    - assets/images/
+#    - assets/images/image_firstpage_login.png
+#    - assets/images/image_app_homepage.png
+#    - assets/images/image_app_start.png
+#    - assets/images/image_plogging_sample.jpg
+#    - assets/images/image_google_icon.png
+#    - assets/images/dog_stage1.gif
+#    - assets/images/stage1.png
+#    - assets/images/stage2.png
+#    - assets/images/stage3.png
+#    - assets/images/stage4.png
+#    - assets/images/stage5.png
+#    - assets/images/trash_monster.png
+#    - assets/images/battle_background.png
+#    - assets/images/t1.png
+#    - assets/images/t2.png
+#    - assets/images/t3.png
+#    - assets/images/t4.png
+#    - assets/images/t5.png
+#    - assets/images/t6.png
+#    - assets/images/t7.png
+#    - assets/images/t8.png
+#    - assets/images/t9.png
+#    - assets/images/t10.png
+#    - assets/images/trashbin.png
 
 
   # The following line ensures that the Material Icons font is
