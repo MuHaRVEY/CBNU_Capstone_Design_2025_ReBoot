@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'my_page.dart';
 import 'community_entire.dart';
+import 'gamepage.dart'; // gmepage import 추가
 
 class HomePage extends StatelessWidget {
   final String userId;
@@ -104,7 +105,13 @@ class HomePage extends StatelessWidget {
         unselectedItemColor: Colors.white70,
         currentIndex: 1,
         onTap: (index) {
-          if (index == 2) {
+          if (index == 0) {
+            // ✅ eSports 아이콘 탭 시 GamePage로 이동
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => GamePage()),
+            );
+          } else if (index == 2) {
             showModalBottomSheet(
               context: context,
               shape: const RoundedRectangleBorder(
@@ -156,5 +163,3 @@ class HomePage extends StatelessWidget {
     );
   }
 }
-
-
