@@ -33,11 +33,11 @@ dependencies:
 
   # Firebase core services
 
-  firebase_core: ^2.32.0
-  firebase_auth: ^4.17.4
-  firebase_database: ^10.4.0
-  firebase_storage: ^11.7.7
-  cloud_firestore: ^4.17.5
+  firebase_core: ^3.13.1
+  firebase_auth: ^5.5.4
+  firebase_database: ^11.3.6
+  firebase_storage: ^12.4.6
+  cloud_firestore: ^5.6.8
 
   # Media and image handling
   image_picker: ^1.0.7
@@ -47,7 +47,7 @@ dependencies:
   google_sign_in: ^6.0.1
 
   # Internationalization (used for DateFormat)
-  intl: ^0.18.1
+  intl: ^0.20.2
 
   # Cupertino icons for iOS style widgets
   cupertino_icons: ^1.0.8
@@ -57,7 +57,7 @@ dependencies:
   json_serializable: ^6.9.4
   location: ^8.0.0
   geolocator: ^14.0.0
-  latlong2: ^0.8.1
+  latlong2: ^0.9.1
   flutter_polyline_points: ^2.0.0
 dev_dependencies:
   flutter_test:
