@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'adventurepage.dart'; // 수정된 AdventurePage를 import
+import 'shoppage.dart';
 
 class GamePage extends StatefulWidget {
   @override
@@ -57,8 +58,8 @@ class _GamePageState extends State<GamePage> {
       bottomNavigationBar: BottomNavigationBar(
         items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.emoji_events),
-            label: '도전과제',
+            icon: Icon(Icons.shopping_bag),
+            label: '인벤토리',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.explore),
@@ -83,7 +84,10 @@ class _GamePageState extends State<GamePage> {
               );
               break;
             case 2:
-              Navigator.pushNamed(context, '/shop');
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => ShopPage()
+                  ),
+              );
               break;
           }
         },
