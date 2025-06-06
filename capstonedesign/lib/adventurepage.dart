@@ -22,6 +22,11 @@ class _AdventurePageState extends State<AdventurePage> {
   late String petImagePath;
   bool isMonsterAttacked = false;
 
+  List<String> memorySequence = [];
+  List<String> memoryOptions = [];
+  int memoryCurrentIndex = 0;
+  bool showMemoryChallengeUIFlag = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +70,35 @@ class _AdventurePageState extends State<AdventurePage> {
     });
   }
 
+  void startMemoryChallenge() {
+    final random = Random();
+    final available = List.generate(10, (index) => 'assets/images/t${index + 1}.png');
+    available.shuffle();
+
+    memorySequence = available.take(4).toList();
+    memoryOptions = List.from(memorySequence)..addAll(available.skip(4).take(4));
+    memoryOptions.shuffle();
+    memoryCurrentIndex = 0;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('쓰레기 기억해!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: memorySequence.map((path) => Image.asset(path, width: 60)).toList(),
+        ),
+      ),
+    );
+
+    Timer(Duration(seconds: 3), () {
+      Navigator.pop(context);
+      setState(() {
+        showMemoryChallengeUIFlag = true;
+      });
+    });
+  }
+
   void startTrashDropChallenge() {
     final random = Random();
     final available = List.generate(10, (index) => 'assets/images/t${index + 1}.png');
@@ -102,7 +136,7 @@ class _AdventurePageState extends State<AdventurePage> {
       child: Draggable<String>(
         data: path,
         feedback: Image.asset(path, width: 60),
-        childWhenDragging: Opacity(opacity: 0.3, child: Image.asset(path, width: 60)),
+        childWhenDragging: SizedBox.shrink(),
         child: Image.asset(path, width: 60),
       ),
     );
@@ -130,7 +164,10 @@ class _AdventurePageState extends State<AdventurePage> {
                   updated.add(_createAnimatedTrash(path, left));
                 }
 
-                updated.add(_createAnimatedBin((screenWidth - 100) / 2));
+                // FIGHT2가 끝나도 안 사라지길래 IF문으로 추가하여 넣었음
+                if (trashList.isNotEmpty) {
+                  updated.add(_createAnimatedBin((screenWidth - 100) / 2));
+                }
                 trashWidgets = updated;
 
                 if (trashList.isEmpty) {
@@ -149,128 +186,6 @@ class _AdventurePageState extends State<AdventurePage> {
           ),
         );
       },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('모험')),
-      body: hasMonster
-          ? inBattle
-          ? buildBattleView()
-          : buildMonsterEncounter()
-          : Center(child: Text('주변에 몬스터가 없습니다.')),
-    );
-  }
-
-  Widget buildMonsterEncounter() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Image.asset('assets/images/trash_monster.png', width: 200, height: 200),
-          SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: startBattle,
-            child: Text('배틀 시작'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget buildBattleView() {
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: Image.asset(
-            'assets/images/battle_background.png',
-            fit: BoxFit.cover,
-          ),
-        ),
-        Positioned(
-          top: 30,
-          right: 30,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              buildHpBar(monsterHp / 3, label: '쓰레기 몬스터'),
-              SizedBox(height: 10),
-              Stack(
-                children: [
-                  Image.asset(
-                    'assets/images/trash_monster.png',
-                    width: 140,
-                    height: 140,
-                  ),
-                  if (isMonsterAttacked)
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      child: Image.asset(
-                        'assets/images/trash_monster_attacked.png',
-                        width: 140,
-                        height: 140,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Positioned(
-          bottom: 180,
-          left: 20,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              buildHpBar(playerHp / 3, label: '내 강아지'),
-              SizedBox(height: 10),
-              Image.asset(
-                petImagePath,
-                width: 160,
-                height: 160,
-              ),
-            ],
-          ),
-        ),
-        ...trashWidgets,
-        Align(
-          alignment: Alignment.bottomCenter,
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => startTapChallenge(),
-                      child: Text('FIGHT1'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => startTrashDropChallenge(),
-                      child: Text('FIGHT2'),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton(onPressed: endBattle, child: Text('RUN')),
-                    ElevatedButton(onPressed: () {}, child: Text('MOVE')),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -358,6 +273,175 @@ class _AdventurePageState extends State<AdventurePage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget buildMonsterEncounter() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Image.asset('assets/images/trash_monster.png', width: 200, height: 200),
+          SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: startBattle,
+            child: Text('배틀 시작'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildBattleView() {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Image.asset(
+            'assets/images/battle_background.png',
+            fit: BoxFit.cover,
+          ),
+        ),
+        Positioned(
+          top: 30,
+          right: 30,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              buildHpBar(monsterHp / 3, label: '쓰레기 몬스터'),
+              SizedBox(height: 10),
+              Stack(
+                children: [
+                  Image.asset(
+                    'assets/images/trash_monster.png',
+                    width: 140,
+                    height: 140,
+                  ),
+                  if (isMonsterAttacked)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      child: Image.asset(
+                        'assets/images/trash_monster_attacked.png',
+                        width: 140,
+                        height: 140,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          bottom: 180,
+          left: 20,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              buildHpBar(playerHp / 3, label: '내 강아지'),
+              SizedBox(height: 10),
+              Image.asset(
+                petImagePath,
+                width: 160,
+                height: 160,
+              ),
+            ],
+          ),
+        ),
+        if (showMemoryChallengeUIFlag) ...[
+          Positioned(
+            bottom: 220,
+            left: 20,
+            child: Wrap(
+              spacing: 12,
+              children: memoryOptions.map((path) {
+                return Draggable<String>(
+                  data: path,
+                  feedback: Image.asset(path, width: 60),
+                  childWhenDragging: Opacity(opacity: 0.3, child: Image.asset(path, width: 60)),
+                  child: Image.asset(path, width: 60),
+                );
+              }).toList(),
+            ),
+          ),
+          Positioned(
+            bottom: 140,
+            left: screenWidth / 2 - 50,
+            child: DragTarget<String>(
+              onWillAccept: (data) => true,
+              onAccept: (data) {
+                if (data == memorySequence[memoryCurrentIndex]) {
+                  setState(() {
+                    memoryOptions.remove(data);
+                    memoryCurrentIndex++;
+
+                    if (memoryCurrentIndex >= memorySequence.length) {
+                      monsterHp = (monsterHp - 1).clamp(0, 3);
+                      showMemoryChallengeUIFlag = false;
+                      showMonsterAttackedEffect();
+                    }
+                  });
+                } else {
+                  setState(() {
+                    playerHp = (playerHp - 1).clamp(0, 3);
+                    showMemoryChallengeUIFlag = false;
+                  });
+                }
+
+                if (monsterHp <= 0 || playerHp <= 0) {
+                  setState(() {
+                    hasMonster = false;
+                    inBattle = false;
+                  });
+                }
+              },
+              builder: (context, candidateData, rejectedData) {
+                return Image.asset('assets/images/trashbin.png', width: 100);
+              },
+            ),
+          ),
+        ],
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(onPressed: startTapChallenge, child: Text('FIGHT1')),
+                    ElevatedButton(onPressed: startTrashDropChallenge, child: Text('FIGHT2')),
+                    ElevatedButton(onPressed: startMemoryChallenge, child: Text('FIGHT3')),
+                  ],
+                ),
+                SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(onPressed: endBattle, child: Text('RUN')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        ...trashWidgets,
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('모험')),
+      body: hasMonster
+          ? inBattle
+          ? buildBattleView()
+          : buildMonsterEncounter()
+          : Center(child: Text('주변에 몬스터가 없습니다.')),
     );
   }
 }
