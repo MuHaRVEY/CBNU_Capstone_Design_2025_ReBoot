@@ -21,6 +21,10 @@ class _AdventurePageState extends State<AdventurePage> {
   bool binDropped = false;
   late String petImagePath;
   bool isMonsterAttacked = false;
+  bool showDamageEffect = false; // 이펙트용 벼눗
+  double effectPosX = 0;
+  double effectPosY = 0;
+  final random = Random();
 
   List<String> memorySequence = [];
   List<String> memoryOptions = [];
@@ -47,15 +51,21 @@ class _AdventurePageState extends State<AdventurePage> {
   void showMonsterAttackedEffect() {
     setState(() {
       isMonsterAttacked = true;
+      showDamageEffect = true;
+      effectPosX = random.nextDouble() * 50 - 25; // -25 ~ 25 사이 랜덤 X 위치
+      effectPosY = random.nextDouble() * 50 - 25; // -25 ~ 25 사이 랜덤 Y 위치
     });
+
     Timer(Duration(milliseconds: 1500), () {
       if (mounted) {
         setState(() {
           isMonsterAttacked = false;
+          showDamageEffect = false;
         });
       }
     });
   }
+
 
   void startBattle() {
     setState(() {
@@ -141,6 +151,7 @@ class _AdventurePageState extends State<AdventurePage> {
       ),
     );
   }
+
 
   Widget _createAnimatedBin(double left) {
     return TweenAnimationBuilder(
@@ -312,6 +323,7 @@ class _AdventurePageState extends State<AdventurePage> {
               buildHpBar(monsterHp / 3, label: '쓰레기 몬스터'),
               SizedBox(height: 10),
               Stack(
+                alignment: Alignment.center,
                 children: [
                   Image.asset(
                     'assets/images/trash_monster.png',
@@ -328,8 +340,22 @@ class _AdventurePageState extends State<AdventurePage> {
                         height: 140,
                       ),
                     ),
+                  if (showDamageEffect)
+                    AnimatedPositioned(
+                      duration: Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      top: 50 + effectPosY,
+                      left: 50 + effectPosX,
+                      child: Image.asset(
+                        'assets/images/damage_effect.png',
+                        width: 60, // 이펙트 크기 줄임
+                        height: 60,
+                      ),
+                    ),
                 ],
               ),
+
+
             ],
           ),
         ),
