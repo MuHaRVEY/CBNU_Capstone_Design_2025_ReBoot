@@ -233,7 +233,7 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      '${widget.nickname}님 안녕하세요 👋',
+                      '${widget.nickname}님 안녕하세요',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
