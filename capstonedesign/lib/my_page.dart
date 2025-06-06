@@ -101,7 +101,7 @@ class _MyPageState extends State<MyPage> {
     }
   }
 
-    Future<void> _pickAndUploadImage() async {
+  Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
