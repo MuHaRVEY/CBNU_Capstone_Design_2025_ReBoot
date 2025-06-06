@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'community_challenge_progress.dart'; // ✅ 진행 화면 import
 
 class CommunityChallengeDetailPage extends StatefulWidget {
   final String challengeId;
@@ -22,41 +23,45 @@ class CommunityChallengeDetailPage extends StatefulWidget {
 class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailPage> {
   bool _isJoining = false;
 
-  Future<void> _joinChallenge(BuildContext context) async {
-    setState(() => _isJoining = true);
 
+  Future<void> _checkAndJoinChallenge(BuildContext context) async {
     final userRef = FirebaseDatabase.instance.ref('users/${widget.userId}/currentChallenges');
     final snapshot = await userRef.get();
+
 
     List<dynamic> existing = [];
     if (snapshot.exists && snapshot.value != null) {
       if (snapshot.value is List) {
-        existing = snapshot.value as List;
+        existing = List<dynamic>.from(snapshot.value as List); // 안전하게 복사
       } else if (snapshot.value is Map) {
-        existing = (snapshot.value as Map).values.toList();
+        existing = List<dynamic>.from((snapshot.value as Map).values); // ✅ 핵심 수정
       }
     }
 
+
     final String challengeName = widget.challenge['name'] ?? '';
 
-    if (!existing.contains(challengeName)) {
-      existing.add(challengeName);
-      await userRef.set(existing);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$challengeName에 참가하셨습니다!')),
+    if (existing.contains(challengeName)) {
+      // ✅ 이미 참가한 경우: 바로 진행 화면으로 이동
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CommunityChallengeProgressPage(
+            challengeId: widget.challengeId,
+            challenge: widget.challenge,
+            userId: widget.userId,
+            nickname: widget.nickname,
+          ),
+        ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('이미 $challengeName에 참가중입니다.')),
-      );
+      // ✅ 참가하지 않은 경우: 다이얼로그 표시
+      _showJoinDialog(context, challengeName);
     }
-
-    setState(() => _isJoining = false);
   }
 
-  void _showJoinDialog() {
-    final String challengeName = widget.challenge['name'] ?? '';
+  /// ✅ 참가 다이얼로그 표시
+  void _showJoinDialog(BuildContext context, String challengeName) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -79,12 +84,77 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
     );
   }
 
+  /// ✅ 참가 처리 및 이동
+  Future<void> _joinChallenge(BuildContext context) async {
+    setState(() => _isJoining = true);
+
+    final userRef = FirebaseDatabase.instance.ref('users/${widget.userId}/currentChallenges');
+    final snapshot = await userRef.get();
+
+    List<dynamic> existing = [];
+    if (snapshot.exists && snapshot.value != null) {
+      if (snapshot.value is List) {
+        existing = snapshot.value as List;
+      } else if (snapshot.value is Map) {
+        existing = (snapshot.value as Map).values.toList();
+      }
+    }
+
+    final String challengeName = widget.challenge['name'] ?? '';
+
+    try {
+      if (!existing.contains(challengeName)) {
+        existing.add(challengeName);
+        await userRef.set(existing);
+        print('✅ 챌린지에 새로 참가 완료');
+        // 참가자 등록 로직 (participants/{userId})
+        final participantsRef = FirebaseDatabase.instance
+            .ref('challenges/${widget.challengeId}/participants');
+
+// 현재 참여자 수를 기준으로 순번 설정
+        final participantSnapshot = await participantsRef.get();
+        final currentOrder = participantSnapshot.exists
+            ? (participantSnapshot.value as Map).length
+            : 0;
+
+        await participantsRef.child(widget.userId).set({
+          'nickname': widget.nickname,
+          'order': currentOrder,
+          'done': false,
+        });
+
+      }
+
+      if (context.mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CommunityChallengeProgressPage(
+              challengeId: widget.challengeId,
+              challenge: widget.challenge,
+              userId: widget.userId,
+              nickname: widget.nickname,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Firebase 오류: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('챌린지 참가 처리 중 오류가 발생했습니다.')),
+      );
+    }
+
+    setState(() => _isJoining = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final String name = widget.challenge['name'] ?? '';
     final String region = widget.challenge['region'] ?? '';
     final String description = widget.challenge['description'] ?? '';
-    final String relayGuide = '''
+
+    const String relayGuide = '''
 동네 청소 릴레이는 지역 기반 팀을 꾸려 릴레이 형식으로 이어가는 챌린지입니다.
 
 참여자들은 팀을 이루어 순서대로 동네 청소에 참여하며, 목표를 달성하면 모두에게 특별 보상이 지급됩니다!
@@ -100,7 +170,7 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
       ),
       body: Container(
         width: double.infinity,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           image: DecorationImage(
             image: AssetImage('assets/images/image_firstpage_login.png'),
             fit: BoxFit.cover,
@@ -140,10 +210,7 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      description,
-                      style: const TextStyle(fontSize: 16),
-                    ),
+                    Text(description, style: const TextStyle(fontSize: 16)),
                     const SizedBox(height: 18),
                     const Divider(thickness: 1.2),
                     const SizedBox(height: 12),
@@ -169,7 +236,7 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
           width: double.infinity,
           height: 52,
           child: ElevatedButton(
-            onPressed: _isJoining ? null : _showJoinDialog,
+            onPressed: _isJoining ? null : () => _checkAndJoinChallenge(context), // ✅ 수정된 버튼
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green.shade600,
               shape: RoundedRectangleBorder(
