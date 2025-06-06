@@ -378,19 +378,26 @@ class _AdventurePageState extends State<AdventurePage> {
         if (showMemoryChallengeUIFlag) ...[
           Positioned(
             bottom: 220,
-            left: 20,
-            child: Wrap(
-              spacing: 12,
-              children: memoryOptions.map((path) {
-                return Draggable<String>(
-                  data: path,
-                  feedback: Image.asset(path, width: 60),
-                  childWhenDragging: Opacity(opacity: 0.3, child: Image.asset(path, width: 60)),
-                  child: Image.asset(path, width: 60),
-                );
-              }).toList(),
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 8, // 줄 간격
+                alignment: WrapAlignment.center, // 가운데 정렬
+                children: memoryOptions.map((path) {
+                  return Draggable<String>(
+                    data: path,
+                    feedback: Image.asset(path, width: 60),
+                    childWhenDragging: Opacity(opacity: 0.3, child: Image.asset(path, width: 60)),
+                    child: Image.asset(path, width: 60),
+                  );
+                }).toList(),
+              ),
             ),
           ),
+
           Positioned(
             bottom: 140,
             left: screenWidth / 2 - 50,
