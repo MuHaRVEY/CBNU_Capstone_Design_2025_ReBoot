@@ -23,30 +23,20 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
-  Widget _buildLikeAndCommentCounts(String postId) {
+  Widget _buildLikeAndCommentCounts(Map<String, dynamic> data, String postId) {
+    final likeCount = data['likeCount'] ?? 0;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // 좋아요 수
-        StreamBuilder<DatabaseEvent>(
-          stream: FirebaseDatabase.instance.ref('likes/$postId').onValue,
-          builder: (context, snapshot) {
-            int likeCount = 0;
-            if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
-              final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>?;
-              likeCount = data?.length ?? 0;
-            }
-            return Row(
-              children: [
-                const Icon(Icons.favorite, size: 14, color: Colors.red),
-                const SizedBox(width: 2),
-                Text('$likeCount', style: const TextStyle(fontSize: 12)),
-                const SizedBox(width: 10),
-              ],
-            );
-          },
+        Row(
+          children: [
+            const Icon(Icons.favorite, size: 14, color: Colors.red),
+            const SizedBox(width: 2),
+            Text('$likeCount', style: const TextStyle(fontSize: 12)),
+            const SizedBox(width: 10),
+          ],
         ),
-        // 댓글 수
         StreamBuilder<DatabaseEvent>(
           stream: FirebaseDatabase.instance.ref('commentsDetail/$postId').onValue,
           builder: (context, snapshot) {
@@ -67,6 +57,7 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
       ],
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +168,7 @@ class _CommunityRegionPageState extends State<CommunityRegionPage> {
                                               Text('${data['region']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                                             ],
                                           const Spacer(),
-                                          _buildLikeAndCommentCounts(post.key!),
+                                          _buildLikeAndCommentCounts(data, post.key!),
                                         ],
                                       ),
                                     ],
