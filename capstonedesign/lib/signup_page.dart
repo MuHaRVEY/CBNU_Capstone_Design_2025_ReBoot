@@ -61,8 +61,14 @@ class _SignupPageState extends State<SignupPage> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const SignupConfirmPage()),
+        MaterialPageRoute(
+          builder: (context) => SignupConfirmPage(
+            userId: id,
+            nickname: nickname,
+          ),
+        ),
       );
+
     } on FirebaseAuthException catch (e) {
       setState(() => _errorText = e.message ?? '회원가입 실패');
     }
