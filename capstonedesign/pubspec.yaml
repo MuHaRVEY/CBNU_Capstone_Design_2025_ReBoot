@@ -60,6 +60,7 @@ dependencies:
   latlong2: ^0.9.1
   flutter_polyline_points: ^2.0.0
   flutter_tts: ^3.6.3
+  sliding_up_panel: ^2.0.0+1
 dev_dependencies:
   flutter_test:
     sdk: flutter
