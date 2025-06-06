@@ -1,20 +1,15 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
-import 'package:flutter_polyline_points/flutter_polyline_points.dart';
-import 'package:http/http.dart' as http;
 
 class NavigationScreen extends StatefulWidget {
   final List<LatLng> routePoints;
-  final int initialRadius; // 반경 추가
 
-
-  const NavigationScreen({super.key, required this.routePoints,required this.initialRadius});
+  const NavigationScreen({super.key, required this.routePoints});
 
   @override
   State<NavigationScreen> createState() => _NavigationScreenState();
@@ -24,7 +19,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
   GoogleMapController? mapController;
   Location location = Location();
   LocationData? currentLocation;
-  List<LatLng> routePoints = [];
   Set<Polyline> polylines = {};
   int nextPointIndex = 1;
   StreamSubscription<LocationData>? locationSubscription;
@@ -40,7 +34,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
   Future<void> initNavigation() async {
     await checkPermission();
     currentLocation = await location.getLocation();
-    await fetchRouteAndDraw();
+
+    // 전달받은 경로로 지도에 표시
+    setState(() {
+      polylines.clear();
+      polylines.add(
+        Polyline(
+          polylineId: const PolylineId('route'),
+          points: widget.routePoints,
+          color: Colors.red,
+          width: 4,
+        ),
+      );
+      isLoading = false;
+    });
+
     startListeningLocation();
   }
 
@@ -58,61 +66,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
     }
   }
 
-  Future<void> fetchRouteAndDraw() async {
-    if (currentLocation == null) return;
-    routePoints = await fetchRoute(
-      LatLng(currentLocation!.latitude!, currentLocation!.longitude!),
-      widget.initialRadius,
-    );
-
-    setState(() {
-      polylines.clear();
-      polylines.add(
-        Polyline(
-          polylineId: const PolylineId('route'),
-          points: routePoints,
-          color: Colors.red,
-          width: 4,
-        ),
-      );
-      isLoading = false;
-    });
-  }
-
-  Future<List<LatLng>> fetchRoute(LatLng position, int radius) async {
-    final url = Uri.parse('http://routeAPI.inno505.duckdns.org/route');
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'lat': position.latitude,
-          'lon': position.longitude,
-          'radius_m': radius,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final encoded = data['encoded_polyline'];
-
-        PolylinePoints polylinePoints = PolylinePoints();
-        List<PointLatLng> result = polylinePoints.decodePolyline(encoded);
-
-        return result
-            .map((point) => LatLng(point.latitude, point.longitude))
-            .toList();
-      } else {
-        print('API 요청 실패: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('에러 발생: $e');
-    }
-
-    return [];
-  }
-
   void startListeningLocation() {
     locationSubscription = location.onLocationChanged.listen((locData) async {
       currentLocation = locData;
@@ -127,40 +80,25 @@ class _NavigationScreenState extends State<NavigationScreen> {
   }
 
   Future<void> checkProximityToRoute(LatLng current) async {
-    if (routePoints.length < 2) return;
+    if (widget.routePoints.length < 2) return;
 
     double distanceToNext =
-        calculateDistance(current, routePoints[nextPointIndex]);
+        calculateDistance(current, widget.routePoints[nextPointIndex]);
 
-    if (distanceToNext < 15 && nextPointIndex < routePoints.length - 1) {
+    if (distanceToNext < 15 && nextPointIndex < widget.routePoints.length - 1) {
       nextPointIndex++;
       await flutterTts.speak("경로를 따라 이동 중입니다");
     }
 
-    double distanceToRoute = getMinDistanceToPolyline(current, routePoints);
+    double distanceToRoute = getMinDistanceToPolyline(current, widget.routePoints);
     if (distanceToRoute > 30) {
-      await flutterTts.speak("경로를 이탈했습니다. 새 경로를 탐색합니다.");
-      routePoints = await fetchRoute(current, widget.initialRadius);
-
-      if (routePoints.isNotEmpty) {
-        setState(() {
-          polylines.clear();
-          polylines.add(
-            Polyline(
-              polylineId: const PolylineId("route"),
-              points: routePoints,
-              color: Colors.red,
-              width: 4,
-            ),
-          );
-          nextPointIndex = 1;
-        });
-      }
+      await flutterTts.speak("경로를 벗어났습니다. 경로를 다시 확인하세요.");
+      // 재탐색 없음
     }
   }
 
   double calculateDistance(LatLng p1, LatLng p2) {
-    const earthRadius = 6371000.0; // meters
+    const earthRadius = 6371000.0;
     double dLat = radians(p2.latitude - p1.latitude);
     double dLng = radians(p2.longitude - p1.longitude);
 
@@ -169,7 +107,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
             cos(radians(p2.latitude)) *
             sin(dLng / 2) *
             sin(dLng / 2);
-
     double c = 2 * atan2(sqrt(a), sqrt(1 - a));
     return earthRadius * c;
   }

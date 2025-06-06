@@ -62,15 +62,19 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
       imageUrl = await _uploadImageToStorage(_selectedImage!);
     }
 
-    // 2. DB에 게시글 저장 (imageUrl은 null 가능)
-    await _dbRef.push().set({
+    // 2. 게시글 생성: 먼저 새 키 생성
+    final newPostRef = _dbRef.push();
+
+    await newPostRef.set({
       'userId': widget.userId,
       'nickname': widget.nickname,
       'title': _titleController.text.trim(),
       'content': _contentController.text.trim(),
-      'region': _regionController.text.trim(), // ⭐️ 지역 저장!
+      'region': _regionController.text.trim(),
       'imageUrl': imageUrl ?? '',
       'createdAt': DateTime.now().toIso8601String(),
+      'likeCount': 0,
+      'likedUsers': {}, // ✅ 빈 Map으로 초기화 (꼭 set 안에 있어야 함)
     });
 
     setState(() {
@@ -85,6 +89,7 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
       Navigator.pop(context);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

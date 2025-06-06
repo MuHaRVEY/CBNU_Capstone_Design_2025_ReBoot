@@ -39,45 +39,56 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
   }
 
   Future<void> _loadPost() async {
-    final snapshot = await _dbRef.child('community_posts/${widget.postId}').once();
-    if (snapshot.snapshot.value != null) {
+    final snapshot = await _dbRef.child('community_posts/${widget.postId}').get();
+    if (snapshot.exists) {
       setState(() {
-        postData = snapshot.snapshot.value as Map<dynamic, dynamic>;
+        postData = snapshot.value as Map<dynamic, dynamic>;
       });
     }
   }
 
   void _listenLikes() {
-    _dbRef.child('likes/${widget.postId}').onValue.listen((event) {
-      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+    _dbRef.child('community_posts/${widget.postId}/likeCount')
+        .onValue.listen((event) {
       setState(() {
-        likeCount = data?.length ?? 0;
-        isLiked = data?.containsKey(widget.userId) ?? false;
+        likeCount = (event.snapshot.value ?? 0) as int;
       });
     });
   }
 
   Future<void> _checkIfLiked() async {
-    final snapshot = await _dbRef.child('likes/${widget.postId}/${widget.userId}').once();
+    final snapshot = await _dbRef
+        .child('community_posts/${widget.postId}/likedUsers/${widget.userId}')
+        .get();
     setState(() {
-      isLiked = snapshot.snapshot.value == true;
+      isLiked = snapshot.exists;
     });
   }
 
   Future<void> _toggleLike() async {
-    final likeRef = _dbRef.child('likes/${widget.postId}/${widget.userId}');
-    if (isLiked) {
-      await likeRef.remove();
+    final postRef = _dbRef.child('community_posts/${widget.postId}');
+    final likedUserRef = postRef.child('likedUsers/${widget.userId}');
+    final likeCountRef = postRef.child('likeCount');
+
+    final likedSnapshot = await likedUserRef.get();
+    final likeCountSnapshot = await likeCountRef.get();
+    int currentLikeCount = (likeCountSnapshot.value ?? 0) as int;
+
+    if (likedSnapshot.exists) {
+      await likedUserRef.remove();
+      await likeCountRef.set(currentLikeCount > 0 ? currentLikeCount - 1 : 0);
+      setState(() => isLiked = false);
     } else {
-      await likeRef.set(true);
+      await likedUserRef.set(true);
+      await likeCountRef.set(currentLikeCount + 1);
+      setState(() => isLiked = true);
     }
-    // 실시간 리스너가 반영
   }
 
   Future<void> _loadComments() async {
-    final snapshot = await _dbRef.child('commentsDetail/${widget.postId}').once();
-    if (snapshot.snapshot.value != null) {
-      final data = snapshot.snapshot.value as Map<dynamic, dynamic>;
+    final snapshot = await _dbRef.child('commentsDetail/${widget.postId}').get();
+    if (snapshot.exists) {
+      final data = snapshot.value as Map<dynamic, dynamic>;
       setState(() {
         comments = data.values.map((e) => e as Map<dynamic, dynamic>).toList();
       });
@@ -92,17 +103,13 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     _dbRef.child('commentsDetail/${widget.postId}').onValue.listen((event) {
       setState(() {
         commentCount = event.snapshot.children.length;
-      });
-      if (event.snapshot.value != null) {
-        final data = event.snapshot.value as Map<dynamic, dynamic>;
-        setState(() {
+        if (event.snapshot.value != null) {
+          final data = event.snapshot.value as Map<dynamic, dynamic>;
           comments = data.values.map((e) => e as Map<dynamic, dynamic>).toList();
-        });
-      } else {
-        setState(() {
+        } else {
           comments = [];
-        });
-      }
+        }
+      });
     });
   }
 
@@ -116,7 +123,6 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     });
     _commentController.clear();
-    // 실시간 리스너 반영
   }
 
   Future<void> _confirmDelete() async {
@@ -133,7 +139,7 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     );
     if (shouldDelete == true) {
       await _dbRef.child('community_posts/${widget.postId}').remove();
-      if (mounted) Navigator.pop(context); // 리스트로 이동
+      Navigator.pop(context);
     }
   }
 
@@ -151,19 +157,9 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: '제목'),
-                ),
-                TextField(
-                  controller: contentController,
-                  decoration: const InputDecoration(labelText: '내용'),
-                  maxLines: 5,
-                ),
-                TextField(
-                  controller: regionController,
-                  decoration: const InputDecoration(labelText: '지역'),
-                ),
+                TextField(controller: titleController, decoration: const InputDecoration(labelText: '제목')),
+                TextField(controller: contentController, decoration: const InputDecoration(labelText: '내용'), maxLines: 5),
+                TextField(controller: regionController, decoration: const InputDecoration(labelText: '지역')),
               ],
             ),
           ),
@@ -197,7 +193,7 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
         final dt = DateTime.parse(timestamp);
         return DateFormat('yyyy년 MM월 dd일 HH:mm').format(dt);
       } catch (e) {
-        return timestamp.toString(); // 예외 발생 시 원본 값 출력
+        return timestamp.toString();
       }
     }
     return timestamp.toString();
@@ -219,15 +215,12 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
           if (postData!['userId'] == widget.userId)
             PopupMenuButton<String>(
               onSelected: (value) {
-                if (value == 'edit') {
-                  _showEditDialog();
-                } else if (value == 'delete') {
-                  _confirmDelete();
-                }
+                if (value == 'edit') _showEditDialog();
+                if (value == 'delete') _confirmDelete();
               },
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'edit', child: Text('수정')),
-                const PopupMenuItem(value: 'delete', child: Text('삭제')),
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'edit', child: Text('수정')),
+                PopupMenuItem(value: 'delete', child: Text('삭제')),
               ],
             ),
         ],
@@ -237,10 +230,7 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              postData!['title'] ?? '',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
+            Text(postData!['title'] ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text('작성자: ${postData!['nickname'] ?? '익명'}'),
             Text('지역: ${postData!['region'] ?? '미지정'}'),
@@ -301,3 +291,5 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     );
   }
 }
+
+

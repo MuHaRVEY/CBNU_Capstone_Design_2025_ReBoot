@@ -73,18 +73,30 @@ class _MyPageState extends State<MyPage> {
         profileImageUrl = data['profileImageUrl'] ?? '';
       });
     }
-    final postsSnapshot = await FirebaseDatabase.instance.ref('community_posts').get();
+    final postsSnapshot = await FirebaseDatabase.instance
+        .ref('community_posts')
+        .get();
     if (postsSnapshot.exists) {
-      final tempList = <String>[];
+      final tempMyPosts = <String>[];
+      final tempLikedPosts = <String>[];
+
       final posts = postsSnapshot.value as Map;
       posts.forEach((key, value) {
-        if (value is Map && value['userId'] == widget.userId) {
-          print('내 글 발견: $key / title: ${value['title']}');
-          tempList.add(key);
+        if (value is Map) {
+          if (value['userId'] == widget.userId) {
+            tempMyPosts.add(key);
+          }
+
+          final likedUsers = value['likedUsers'] as Map<dynamic, dynamic>?;
+          if (likedUsers != null && likedUsers.containsKey(widget.userId)) {
+            tempLikedPosts.add(key);
+          }
         }
       });
+
       setState(() {
-        myPosts = tempList;
+        myPosts = tempMyPosts;
+        likedPosts = tempLikedPosts;
       });
     }
   }
@@ -326,23 +338,51 @@ class _MyPageState extends State<MyPage> {
     );
   }
 
-  Widget _buildLikedPostsDropdown() => _buildDropdown('좋아요한 글', likedPosts, Icons.favorite_outline);
+  Widget _buildLikedPostsDropdown() {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ExpansionTile(
+        title: const Text('좋아요한 글', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        children: likedPosts.map((postKey) {
+          return FutureBuilder<DataSnapshot>(
+            future: FirebaseDatabase.instance.ref('community_posts/$postKey').get(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const ListTile(title: Text('불러오는 중...'));
+              }
+              if (snapshot.hasError || !snapshot.hasData || snapshot.data!.value == null) {
+                return const ListTile(title: Text('삭제된 게시글입니다.'));
+              }
 
-  Widget _buildDropdown(String title, List<String> items, IconData icon) => Container(
-    margin: const EdgeInsets.only(top: 12),
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.85),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: ExpansionTile(
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-      children: items.map((item) => ListTile(
-        title: Text(item, style: const TextStyle(fontSize: 14)),
-        leading: Icon(icon),
-        onTap: () {},
-      )).toList(),
-    ),
-  );
+              final post = Map<String, dynamic>.from(snapshot.data!.value as Map);
+              final title = post['title'] ?? '제목 없음';
+
+              return ListTile(
+                leading: const Icon(Icons.favorite, color: Colors.red),
+                title: Text(title, style: const TextStyle(fontSize: 14)),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CommunityDetailPage(
+                        postId: postKey,
+                        userId: widget.userId,
+                        nickname: widget.nickname,
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        }).toList(),
+      ),
+    );
+  }
 
   Widget _buildBottomButton(IconData icon, String label, VoidCallback onTap) => GestureDetector(
     onTap: onTap,
