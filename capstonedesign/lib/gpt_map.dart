@@ -181,7 +181,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => 
-                                PolylineMapScreen()
+                                LivePolylineMapScreen()
                                 )
                             );
                           },
