@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:shared_preferences/shared_preferences.dart'; //테스트 땜에 추가 후에 삭제해야함
 
 import 'community_popular.dart';
 import 'community_region.dart';
@@ -7,6 +8,7 @@ import 'community_newthings.dart';
 import 'community_detail.dart';
 import 'community_challenge.dart';
 import 'community_makechallenge.dart';
+import 'community_ad_wrapper.dart';
 
 class CommunityEntireTab extends StatelessWidget {
   final void Function(String postId) openDetailPage;
@@ -214,129 +216,155 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
     );
   }
 
+  //광고 차단 초기화 함수(후에 삭제)
+  Future<void> _clearAdBlock() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('ad_block_until');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('광고 차단 초기화됨')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/image_firstpage_login.png',
-              fit: BoxFit.cover,
+    return CommunityAdWrapper(
+      child: Scaffold(
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/image_firstpage_login.png',
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 16.0, top: 16.0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '${widget.nickname}님 안녕하세요',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
+            SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16.0, top: 16.0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${widget.nickname}님 안녕하세요',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: const [
-                      Icon(Icons.people_alt_outlined, color: Colors.black),
-                      SizedBox(width: 8),
-                      Text(
-                        '커뮤니티',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  // 광고 차단 초기화 버튼(후에 삭제)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _clearAdBlock,
+                        child: const Text('광고 차단 초기화'),
                       ),
-                    ],
+                    ),
+                  ),//여기까지 광고 차단 초기화 버튼
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: const [
+                        Icon(Icons.people_alt_outlined, color: Colors.black),
+                        SizedBox(width: 8),
+                        Text(
+                          '커뮤니티',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Container(
-                  color: Colors.white.withOpacity(0.9),
-                  child: TabBar(
-                    controller: _tabController,
-                    labelColor: Colors.black,
-                    unselectedLabelColor: Colors.grey,
-                    indicatorColor: Colors.green,
-                    tabs: tabs.map((label) => Tab(text: label)).toList(),
+                  Container(
+                    color: Colors.white.withOpacity(0.9),
+                    child: TabBar(
+                      controller: _tabController,
+                      labelColor: Colors.black,
+                      unselectedLabelColor: Colors.grey,
+                      indicatorColor: Colors.green,
+                      tabs: tabs.map((label) => Tab(text: label)).toList(),
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      CommunityEntireTab(
-                        openDetailPage: openDetailPage,
-                        userId: widget.userId,
-                        nickname: widget.nickname,
-                        key: UniqueKey(),
-                      ),
-                      CommunityPopularPage(
-                        onTapPost: (post) => openDetailPage(post.key!),
-                        key: UniqueKey(),
-                      ),
-                      CommunityRegionPage(
-                        onTapPost: (post) => openDetailPage(post.key!),
-                        key: UniqueKey(),
-                      ),
-                      CommunityChallengePage(
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        CommunityEntireTab(
+                          openDetailPage: openDetailPage,
+                          userId: widget.userId,
+                          nickname: widget.nickname,
+                          key: UniqueKey(),
+                        ),
+                        CommunityPopularPage(
+                          onTapPost: (post) => openDetailPage(post.key!),
+                          key: UniqueKey(),
+                        ),
+                        CommunityRegionPage(
+                          onTapPost: (post) => openDetailPage(post.key!),
+                          key: UniqueKey(),
+                        ),
+                        CommunityChallengePage(
+                          userId: widget.userId,
+                          nickname: widget.nickname,
+                          region: '',
+                          key: UniqueKey(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        floatingActionButton: Builder(
+          builder: (context) {
+            if (_tabController.index == 3) {
+              // 챌린지 탭
+              return FloatingActionButton(
+                backgroundColor: Colors.green.shade600,
+                child: const Icon(Icons.add),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CommunityMakeChallengePage(
                         userId: widget.userId,
                         nickname: widget.nickname,
                         region: '',
-                        key: UniqueKey(),
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: Builder(
-        builder: (context) {
-          if (_tabController.index == 3) {
-            // 챌린지 탭
-            return FloatingActionButton(
-              backgroundColor: Colors.green.shade600,
-              child: const Icon(Icons.add),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CommunityMakeChallengePage(
-                      userId: widget.userId,
-                      nickname: widget.nickname,
-                      region: '',
                     ),
-                  ),
-                );
-              },
-            );
-          } else {
-            // 나머지 탭(전체/인기/지역)
-            return FloatingActionButton(
-              backgroundColor: Colors.green.shade600,
-              child: const Icon(Icons.add),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CommunityNewThingsPage(
-                      userId: widget.userId,
-                      nickname: widget.nickname,
+                  );
+                },
+              );
+            } else {
+              // 나머지 탭(전체/인기/지역)
+              return FloatingActionButton(
+                backgroundColor: Colors.green.shade600,
+                child: const Icon(Icons.add),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CommunityNewThingsPage(
+                        userId: widget.userId,
+                        nickname: widget.nickname,
+                      ),
                     ),
-                  ),
-                );
-              },
-            );
-          }
-        },
+                  );
+                },
+              );
+            }
+          },
+        ),
       ),
     );
   }
