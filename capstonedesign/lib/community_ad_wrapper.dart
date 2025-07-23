@@ -70,36 +70,62 @@ class _CommunityAdWrapperState extends State<CommunityAdWrapper> {
     });
   }
 
+  Future<void> _launchAdLink(String url) async {
+    final uri = Uri.parse(url);
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        // Fallback: 내부 WebView로 열기
+        await launchUrl(uri, mode: LaunchMode.inAppWebView);
+      }
+    } catch (e) {
+      debugPrint("❗ 링크 열기 실패: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('링크를 열 수 없습니다')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_showAd && _ad != null) {
       return Scaffold(
         body: Stack(
           children: [
-            // 뒷배경 어둡게
             Opacity(
               opacity: 0.6,
               child: widget.child,
             ),
             Center(
               child: GestureDetector(
-                onTap: () async {
-                  if (await canLaunchUrl(Uri.parse(_ad!.link))) {
-                    launchUrl(Uri.parse(_ad!.link));
-                  }
-                },
+                onTap: () => _launchAdLink(_ad!.link),
                 child: Container(
                   width: MediaQuery.of(context).size.width * 0.8,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black26)],
+                    boxShadow: [
+                      BoxShadow(blurRadius: 10, color: Colors.black26),
+                    ],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: Image.network(
                       _ad!.imageUrl,
                       fit: BoxFit.contain,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return const SizedBox(
+                          height: 200,
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      },
                       errorBuilder: (_, __, ___) =>
                       const Icon(Icons.broken_image, size: 100),
                     ),
@@ -137,4 +163,3 @@ class _CommunityAdWrapperState extends State<CommunityAdWrapper> {
     return widget.child;
   }
 }
-
