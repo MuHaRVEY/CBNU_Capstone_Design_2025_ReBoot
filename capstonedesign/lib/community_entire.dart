@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:shared_preferences/shared_preferences.dart'; //테스트 땜에 추가 후에 삭제해야함
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'community_popular.dart';
 import 'community_region.dart';
@@ -14,6 +14,7 @@ class CommunityEntireTab extends StatelessWidget {
   final void Function(String postId) openDetailPage;
   final String userId;
   final String nickname;
+
   const CommunityEntireTab({
     required this.openDetailPage,
     required this.userId,
@@ -33,16 +34,11 @@ class CommunityEntireTab extends StatelessWidget {
     final likeCount = data['likeCount'] ?? 0;
 
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          children: [
-            const Icon(Icons.favorite, size: 14, color: Colors.red),
-            const SizedBox(width: 2),
-            Text('$likeCount', style: const TextStyle(fontSize: 12)),
-            const SizedBox(width: 10),
-          ],
-        ),
+        const Icon(Icons.favorite, size: 14, color: Colors.red),
+        const SizedBox(width: 2),
+        Text('$likeCount', style: const TextStyle(fontSize: 12)),
+        const SizedBox(width: 10),
         FutureBuilder<DataSnapshot>(
           future: FirebaseDatabase.instance.ref('commentsDetail/$postId').get(),
           builder: (context, snapshot) {
@@ -64,7 +60,6 @@ class CommunityEntireTab extends StatelessWidget {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DatabaseEvent>(
@@ -76,6 +71,7 @@ class CommunityEntireTab extends StatelessWidget {
         if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
           return const Center(child: Text('게시물이 없습니다.'));
         }
+
         final posts = snapshot.data!.snapshot.children.toList();
 
         return ListView.builder(
@@ -88,72 +84,72 @@ class CommunityEntireTab extends StatelessWidget {
             return GestureDetector(
               onTap: () => openDetailPage(post.key!),
               child: Card(
-                color: Colors.white.withOpacity(0.95),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                margin: const EdgeInsets.only(bottom: 16),
+                color: Colors.white,
+                elevation: 3,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                margin: const EdgeInsets.symmetric(vertical: 10),
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           CircleAvatar(
                             radius: 20,
-                            backgroundColor: Colors.green.shade300,
+                            backgroundColor: Colors.green.shade400,
                             child: const Icon(Icons.person, color: Colors.white),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  data['title'] ?? '',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    if (data['nickname'] != null && data['nickname'].toString().isNotEmpty)
-                                      Text('${data['nickname']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                    if (data['createdAt'] != null && data['createdAt'].toString().isNotEmpty)
-                                      ...[
-                                        const SizedBox(width: 10),
-                                        Text(_formatDate(data['createdAt']), style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                      ],
-                                    if (data['region'] != null && data['region'].toString().isNotEmpty)
-                                      ...[
-                                        const SizedBox(width: 10),
-                                        Text('${data['region']}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                      ],
-                                    const Spacer(),
-                                    _buildLikeAndCommentCounts(data, post.key!),
-                                  ],
-                                ),
-                              ],
-                            ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                data['nickname'] ?? '',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              Text(
+                                _formatDate(data['createdAt']),
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              ),
+                            ],
                           ),
+                          const Spacer(),
+                          _buildLikeAndCommentCounts(data, post.key!),
                         ],
                       ),
                       const SizedBox(height: 10),
-                      if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            data['imageUrl'],
-                            fit: BoxFit.cover,
-                            height: 160,
-                            width: double.infinity,
-                            errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.broken_image, size: 80),
-                          ),
-                        ),
+                      Text(
+                        data['title'] ?? '',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
                       if (data['content'] != null && data['content'].toString().isNotEmpty)
                         Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            data['content'],
+                            style: const TextStyle(fontSize: 14, color: Colors.black87),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty)
+                        Padding(
                           padding: const EdgeInsets.only(top: 10),
-                          child: Text(data['content'], style: const TextStyle(fontSize: 14)),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              data['imageUrl'],
+                              height: 160,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                height: 160,
+                                color: Colors.grey[200],
+                                child: const Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                              ),
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -191,10 +187,7 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
   void initState() {
     super.initState();
     _tabController = TabController(length: tabs.length, vsync: this);
-    _tabController.addListener(() {
-      // FAB 동작 변경 위해 rebuild 필요
-      setState(() {});
-    });
+    _tabController.addListener(() => setState(() {}));
   }
 
   @override
@@ -216,7 +209,6 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
     );
   }
 
-  //광고 차단 초기화 함수(후에 삭제)
   Future<void> _clearAdBlock() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('ad_block_until');
@@ -235,6 +227,8 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
               child: Image.asset(
                 'assets/images/image_firstpage_login.png',
                 fit: BoxFit.cover,
+                colorBlendMode: BlendMode.softLight,
+                color: Colors.white.withOpacity(0.2),
               ),
             ),
             SafeArea(
@@ -254,9 +248,8 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                       ),
                     ),
                   ),
-                  // 광고 차단 초기화 버튼(후에 삭제)
                   Padding(
-                    padding: const EdgeInsets.only(left: 16.0, top: 8.0, bottom: 8.0),
+                    padding: const EdgeInsets.only(left: 16.0, top: 8.0),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: ElevatedButton(
@@ -268,7 +261,7 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                         child: const Text('광고 차단 초기화'),
                       ),
                     ),
-                  ),//여기까지 광고 차단 초기화 버튼
+                  ),
                   const SizedBox(height: 8),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -276,20 +269,20 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                       children: const [
                         Icon(Icons.people_alt_outlined, color: Colors.black),
                         SizedBox(width: 8),
-                        Text(
-                          '커뮤니티',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
+                        Text('커뮤니티',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
                   Container(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withOpacity(0.95),
                     child: TabBar(
                       controller: _tabController,
-                      labelColor: Colors.black,
+                      labelColor: Colors.green.shade700,
                       unselectedLabelColor: Colors.grey,
-                      indicatorColor: Colors.green,
+                      indicatorColor: Colors.green.shade700,
+                      indicatorWeight: 3.5,
+                      labelStyle: const TextStyle(fontWeight: FontWeight.bold),
                       tabs: tabs.map((label) => Tab(text: label)).toList(),
                     ),
                   ),
@@ -325,44 +318,27 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
             ),
           ],
         ),
-        floatingActionButton: Builder(
-          builder: (context) {
-            if (_tabController.index == 3) {
-              // 챌린지 탭
-              return FloatingActionButton(
-                backgroundColor: Colors.green.shade600,
-                child: const Icon(Icons.add),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CommunityMakeChallengePage(
-                        userId: widget.userId,
-                        nickname: widget.nickname,
-                        region: '',
-                      ),
-                    ),
-                  );
-                },
-              );
-            } else {
-              // 나머지 탭(전체/인기/지역)
-              return FloatingActionButton(
-                backgroundColor: Colors.green.shade600,
-                child: const Icon(Icons.add),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CommunityNewThingsPage(
-                        userId: widget.userId,
-                        nickname: widget.nickname,
-                      ),
-                    ),
-                  );
-                },
-              );
-            }
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: Colors.green.shade600,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: const Icon(Icons.add),
+          onPressed: () {
+            final isChallengeTab = _tabController.index == 3;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => isChallengeTab
+                    ? CommunityMakeChallengePage(
+                  userId: widget.userId,
+                  nickname: widget.nickname,
+                  region: '',
+                )
+                    : CommunityNewThingsPage(
+                  userId: widget.userId,
+                  nickname: widget.nickname,
+                ),
+              ),
+            );
           },
         ),
       ),
