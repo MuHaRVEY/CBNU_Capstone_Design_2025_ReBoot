@@ -86,7 +86,13 @@ class CommunityEntireTab extends StatelessWidget {
               child: Card(
                 color: Colors.white,
                 elevation: 3,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: Colors.grey.shade400,
+                    width: 1.5,
+                  ),
+                ),
                 margin: const EdgeInsets.symmetric(vertical: 10),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -163,7 +169,6 @@ class CommunityEntireTab extends StatelessWidget {
   }
 }
 
-// === Main Page ===
 class CommunityEntirePage extends StatefulWidget {
   final String userId;
   final String nickname;
