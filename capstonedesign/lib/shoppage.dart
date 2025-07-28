@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'coin_provider.dart'; // 코인 상태관리 클래스
+import 'coin_provider.dart';
 
 class ShopPage extends StatelessWidget {
   @override
@@ -56,7 +56,7 @@ class ShopPage extends StatelessWidget {
             ),
           ),
 
-          // 아이템 목록 (Row)
+          // 아이템 목록
           Positioned(
             bottom: 230,
             left: 0,
@@ -75,7 +75,6 @@ class ShopPage extends StatelessWidget {
     );
   }
 
-  // 상점 아이템 위젯 (표시가격 + 실제가격 분리)
   Widget _buildShopItem(
       BuildContext context,
       String name,
@@ -83,10 +82,18 @@ class ShopPage extends StatelessWidget {
       int actualPrice,
       IconData icon,
       ) {
-    final coinProvider = Provider.of<CoinProvider>(context, listen: false);
+    final coinProvider = Provider.of<CoinProvider>(context);
+    final isOwned = coinProvider.hasItem(name);
 
     return GestureDetector(
       onTap: () async {
+        if (isOwned) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$name은 이미 구매한 아이템입니다.')),
+          );
+          return;
+        }
+
         final result = await showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -106,7 +113,7 @@ class ShopPage extends StatelessWidget {
         );
 
         if (result == true) {
-          final success = await coinProvider.subtractCoins(actualPrice);
+          final success = await coinProvider.purchaseItem(name, actualPrice);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(success ? '$name 구매 완료!' : '코인이 부족합니다.'),
@@ -134,12 +141,23 @@ class ShopPage extends StatelessWidget {
           children: [
             Icon(icon, size: 36),
             SizedBox(height: 8),
-            Text(name, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-            Text(displayPrice, style: TextStyle(fontSize: 12)),
+            Text(
+              name,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+            Text(
+              isOwned ? '구매 완료' : displayPrice,
+              style: TextStyle(
+                fontSize: 12,
+                color: isOwned ? Colors.green : Colors.black,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
+
 

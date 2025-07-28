@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:firebase_core/firebase_core.dart'; // Firebase Core import
-import 'firebase_options.dart'; // flutterfire configure로 생성된 파일
-import 'first_page.dart'; // 첫 페이지 import
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'package:provider/provider.dart';
 import 'coin_provider.dart';
+import 'first_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 플랫폼에 따라 Firebase 초기화 분기
   if (kIsWeb) {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -17,11 +16,12 @@ void main() async {
   } else {
     await Firebase.initializeApp();
   }
+
   runApp(
-      ChangeNotifierProvider(
-        create: (_) => CoinProvider(),
-        child: RebootApp(),
-      ),
+    ChangeNotifierProvider(
+      create: (_) => CoinProvider()..init(), //초기화 호출
+      child: RebootApp(),
+    ),
   );
 }
 
@@ -30,9 +30,7 @@ class RebootApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Re:Boot',
-// 첫 페이지로 FirstPage 설정
-      home: FirstPage(), // 첫 페이지
-      // home: GamePage(), // 게임 페이지 테스트용
+      home: FirstPage(),
       debugShowCheckedModeBanner: false,
     );
   }
