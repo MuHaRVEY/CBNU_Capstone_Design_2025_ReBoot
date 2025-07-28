@@ -22,7 +22,7 @@ class _CommunityMakeChallengePageState extends State<CommunityMakeChallengePage>
   final _nameController = TextEditingController();
   final _regionController = TextEditingController();
   final _descController = TextEditingController();
-
+  final _guideController = TextEditingController();
   bool _isLoading = false;
 
   @override
@@ -30,6 +30,7 @@ class _CommunityMakeChallengePageState extends State<CommunityMakeChallengePage>
     _nameController.dispose();
     _regionController.dispose();
     _descController.dispose();
+    _guideController.dispose();
     super.dispose();
   }
 
@@ -41,6 +42,7 @@ class _CommunityMakeChallengePageState extends State<CommunityMakeChallengePage>
         'name': _nameController.text,
         'region': _regionController.text,
         'description': _descController.text,
+        'guide': _guideController.text.trim(),
         'createdBy': widget.nickname,
         'createdByUserId': widget.userId,
         'createdAt': DateTime.now().toIso8601String(),
@@ -93,6 +95,13 @@ class _CommunityMakeChallengePageState extends State<CommunityMakeChallengePage>
                 decoration: const InputDecoration(labelText: '설명'),
                 maxLines: 2,
                 validator: (value) => value == null || value.isEmpty ? '설명을 입력하세요' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _guideController,
+                decoration: const InputDecoration(labelText: '챌린지 안내문'), // ✅ 안내문 입력
+                maxLines: 4,
+                validator: (value) => value == null || value.isEmpty ? '안내문을 입력하세요' : null,
               ),
               const SizedBox(height: 32),
               ElevatedButton.icon(
