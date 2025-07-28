@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart'; // Firebase Core import
 import 'firebase_options.dart'; // flutterfire configure로 생성된 파일
 import 'first_page.dart'; // 첫 페이지 import
+import 'package:provider/provider.dart';
+import 'coin_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +17,12 @@ void main() async {
   } else {
     await Firebase.initializeApp();
   }
-  runApp(RebootApp());
+  runApp(
+      ChangeNotifierProvider(
+        create: (_) => CoinProvider(),
+        child: RebootApp(),
+      ),
+  );
 }
 
 class RebootApp extends StatelessWidget {
