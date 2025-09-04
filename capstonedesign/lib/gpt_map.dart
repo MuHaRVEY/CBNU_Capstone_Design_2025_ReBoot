@@ -1,3 +1,4 @@
+import 'package:capstonedesign/polyline_draw.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
@@ -7,6 +8,7 @@ import 'dart:convert';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'navigator.dart';
 import 'dart:ui';
+import 'google_map_service.dart';
 
 class PolylineMapScreen extends StatefulWidget {
   const PolylineMapScreen({super.key});
@@ -16,7 +18,6 @@ class PolylineMapScreen extends StatefulWidget {
 }
 
 class _PolylineMapScreenState extends State<PolylineMapScreen> {
-  GoogleMapController? mapController;
   Set<Polyline> polylines = {};
   LatLng? currentPosition;
   Location location = Location();
@@ -61,7 +62,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
     int? radius = int.tryParse(radiusController.text);
     if (radius == null || radius <= 0) return;
 
-    final url = Uri.parse('http://routeAPI.inno505.duckdns.org/route');
+    final url = Uri.parse('https://routeAPI.inno505.duckdns.org/route');
 
     try {
       final response = await http.post(
@@ -101,7 +102,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
           _isRouteReady = true;
         });
 
-          mapController?.animateCamera(
+          GoogleMapService().controller?.animateCamera(
             CameraUpdate.newLatLngZoom(polylineCoordinates.first, 15),
           );       
         }
@@ -173,6 +174,19 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                           ),
                           child: const Text('네비게이션 시작'),
                         ),
+                         const SizedBox(height: 8),
+                         ElevatedButton(
+                          onPressed: (){
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => 
+                                LivePolylineMapScreen()
+                                )
+                            );
+                          },
+                          child: Text("경로 없이"),
+                         )
                       ],
                     ),
                   ),
@@ -188,7 +202,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                     ),
                     polylines: polylines,
                     onMapCreated: (GoogleMapController controller) {
-                      mapController = controller;
+                      GoogleMapService().setController(controller);
                     },
                     myLocationEnabled: true,
                     myLocationButtonEnabled: false, // 기본 버튼 끔
@@ -202,8 +216,8 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                   child: FloatingActionButton(
                     heroTag: 'fab-location',
                     onPressed: () {
-                      if (currentPosition != null && mapController != null) {
-                        mapController!.animateCamera(
+                      if (currentPosition != null && GoogleMapService().controller != null) {
+                        GoogleMapService().controller!.animateCamera(
                           CameraUpdate.newLatLngZoom(currentPosition!, 15),
                         );
                       }
