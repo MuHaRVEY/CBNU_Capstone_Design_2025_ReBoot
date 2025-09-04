@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
+import 'utils/image_utils.dart';
 
 class AdventurePage extends StatefulWidget {
   final int petState;
@@ -30,11 +31,25 @@ class _AdventurePageState extends State<AdventurePage> {
   List<String> memoryOptions = [];
   int memoryCurrentIndex = 0;
   bool showMemoryChallengeUIFlag = false;
+  
+  // Timer management to prevent memory leaks
+  Timer? _attackEffectTimer;
+  Timer? _memoryDialogTimer;
+  Timer? _tapChallengeTimer;
 
   @override
   void initState() {
     super.initState();
     petImagePath = _getPetImage(widget.petState);
+  }
+
+  @override
+  void dispose() {
+    // Cancel all timers to prevent memory leaks
+    _attackEffectTimer?.cancel();
+    _memoryDialogTimer?.cancel();
+    _tapChallengeTimer?.cancel();
+    super.dispose();
   }
 
   String _getPetImage(int state) {
@@ -56,7 +71,8 @@ class _AdventurePageState extends State<AdventurePage> {
       effectPosY = random.nextDouble() * 50 - 25; // -25 ~ 25 사이 랜덤 Y 위치
     });
 
-    Timer(Duration(milliseconds: 1500), () {
+    _attackEffectTimer?.cancel(); // Cancel existing timer
+    _attackEffectTimer = Timer(Duration(milliseconds: 1500), () {
       if (mounted) {
         setState(() {
           isMonsterAttacked = false;
@@ -101,11 +117,14 @@ class _AdventurePageState extends State<AdventurePage> {
       ),
     );
 
-    Timer(Duration(seconds: 3), () {
-      Navigator.pop(context);
-      setState(() {
-        showMemoryChallengeUIFlag = true;
-      });
+    _memoryDialogTimer?.cancel(); // Cancel existing timer
+    _memoryDialogTimer = Timer(Duration(seconds: 3), () {
+      if (mounted) {
+        Navigator.pop(context);
+        setState(() {
+          showMemoryChallengeUIFlag = true;
+        });
+      }
     });
   }
 
@@ -145,9 +164,9 @@ class _AdventurePageState extends State<AdventurePage> {
       },
       child: Draggable<String>(
         data: path,
-        feedback: Image.asset(path, width: 60),
-        childWhenDragging: SizedBox.shrink(),
-        child: Image.asset(path, width: 60),
+        feedback: ImageUtils.getOptimizedImage(path, width: 60),
+        childWhenDragging: const SizedBox.shrink(),
+        child: ImageUtils.getOptimizedImage(path, width: 60),
       ),
     );
   }
@@ -192,7 +211,10 @@ class _AdventurePageState extends State<AdventurePage> {
               });
             },
             builder: (context, candidateData, rejectedData) {
-              return Image.asset('assets/images/trashbin.png', width: 100);
+              return ImageUtils.getOptimizedImage(
+                'assets/images/trashbin.png',
+                width: 100,
+              );
             },
           ),
         );
@@ -208,8 +230,9 @@ class _AdventurePageState extends State<AdventurePage> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        Timer(Duration(seconds: 3), () {
-          if (!challengeEnded) {
+        _tapChallengeTimer?.cancel(); // Cancel existing timer
+        _tapChallengeTimer = Timer(Duration(seconds: 3), () {
+          if (!challengeEnded && mounted) {
             challengeEnded = true;
             Navigator.pop(context);
             resolveTapChallenge(tapCount);
@@ -223,9 +246,9 @@ class _AdventurePageState extends State<AdventurePage> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('3초 안에 15번 눌러야 합니다!'),
+                  const Text('3초 안에 15번 눌러야 합니다!'),
                   Text('현재: $tapCount'),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   ElevatedButton(
                     onPressed: () {
                       setState(() {
@@ -233,7 +256,7 @@ class _AdventurePageState extends State<AdventurePage> {
                       });
                       showMonsterAttackedEffect();
                     },
-                    child: Text('눌러!'),
+                    child: const Text('눌러!'),
                   ),
                 ],
               );
@@ -264,7 +287,7 @@ class _AdventurePageState extends State<AdventurePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontWeight: FontWeight.bold)),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
         Container(
           width: 120,
           height: 10,
@@ -293,10 +316,10 @@ class _AdventurePageState extends State<AdventurePage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset('assets/images/trash_monster.png', width: 200, height: 200),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           ElevatedButton(
             onPressed: startBattle,
-            child: Text('배틀 시작'),
+            child: const Text('배틀 시작'),
           ),
         ],
       ),
@@ -325,7 +348,7 @@ class _AdventurePageState extends State<AdventurePage> {
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  Image.asset(
+                  ImageUtils.getOptimizedImage(
                     'assets/images/trash_monster.png',
                     width: 140,
                     height: 140,
@@ -334,7 +357,7 @@ class _AdventurePageState extends State<AdventurePage> {
                     Positioned(
                       top: 0,
                       left: 0,
-                      child: Image.asset(
+                      child: ImageUtils.getOptimizedImage(
                         'assets/images/trash_monster_attacked.png',
                         width: 140,
                         height: 140,
@@ -346,7 +369,7 @@ class _AdventurePageState extends State<AdventurePage> {
                       curve: Curves.easeInOut,
                       top: 50 + effectPosY,
                       left: 50 + effectPosX,
-                      child: Image.asset(
+                      child: ImageUtils.getOptimizedImage(
                         'assets/images/damage_effect.png',
                         width: 60, // 이펙트 크기 줄임
                         height: 60,
@@ -366,8 +389,8 @@ class _AdventurePageState extends State<AdventurePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               buildHpBar(playerHp / 3, label: '내 강아지'),
-              SizedBox(height: 10),
-              Image.asset(
+              const SizedBox(height: 10),
+              ImageUtils.getOptimizedImage(
                 petImagePath,
                 width: 160,
                 height: 160,
@@ -445,16 +468,16 @@ class _AdventurePageState extends State<AdventurePage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    ElevatedButton(onPressed: startTapChallenge, child: Text('FIGHT1')),
-                    ElevatedButton(onPressed: startTrashDropChallenge, child: Text('FIGHT2')),
-                    ElevatedButton(onPressed: startMemoryChallenge, child: Text('FIGHT3')),
+                    ElevatedButton(onPressed: startTapChallenge, child: const Text('FIGHT1')),
+                    ElevatedButton(onPressed: startTrashDropChallenge, child: const Text('FIGHT2')),
+                    ElevatedButton(onPressed: startMemoryChallenge, child: const Text('FIGHT3')),
                   ],
                 ),
                 SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    ElevatedButton(onPressed: endBattle, child: Text('RUN')),
+                    ElevatedButton(onPressed: endBattle, child: const Text('RUN')),
                   ],
                 ),
               ],
@@ -469,12 +492,12 @@ class _AdventurePageState extends State<AdventurePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('모험')),
+      appBar: AppBar(title: const Text('모험')),
       body: hasMonster
           ? inBattle
           ? buildBattleView()
           : buildMonsterEncounter()
-          : Center(child: Text('주변에 몬스터가 없습니다.')),
+          : Center(child: const Text('주변에 몬스터가 없습니다.')),
     );
   }
 }

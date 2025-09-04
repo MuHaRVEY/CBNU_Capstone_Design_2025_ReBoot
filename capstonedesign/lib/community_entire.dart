@@ -299,21 +299,17 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                           openDetailPage: openDetailPage,
                           userId: widget.userId,
                           nickname: widget.nickname,
-                          key: UniqueKey(),
                         ),
                         CommunityPopularPage(
                           onTapPost: (post) => openDetailPage(post.key!),
-                          key: UniqueKey(),
                         ),
                         CommunityRegionPage(
                           onTapPost: (post) => openDetailPage(post.key!),
-                          key: UniqueKey(),
                         ),
                         CommunityChallengePage(
                           userId: widget.userId,
                           nickname: widget.nickname,
                           region: '',
-                          key: UniqueKey(),
                         ),
                       ],
                     ),

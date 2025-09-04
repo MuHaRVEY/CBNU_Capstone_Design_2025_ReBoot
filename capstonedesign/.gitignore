@@ -46,3 +46,6 @@ app.*.map.json
 
 # ✅ Firebase 설정 파일 무시
 lib/firebase_options.dart
+
+# Image backup folder
+assets/images_backup/

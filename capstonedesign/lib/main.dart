@@ -8,6 +8,7 @@ import 'first_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auto_login_redirect.dart';
+import 'utils/image_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,7 +47,16 @@ class RebootApp extends StatelessWidget {
       title: 'Re:Boot',
       debugShowCheckedModeBanner: false,
       // ✅ 자동 로그인 여부에 따라 첫 화면 분기
-      home: isLoggedIn ? const AutoLoginRedirect() : const FirstPage(),
+      home: Builder(
+        builder: (context) {
+          // Precache images in background after the first frame
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ImageUtils.precacheCommonImages(context);
+          });
+          
+          return isLoggedIn ? const AutoLoginRedirect() : const FirstPage();
+        },
+      ),
     );
   }
 }
