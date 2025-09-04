@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'utils/firebase_data_utils.dart';
 
 class CommunityChallengeProgressPage extends StatefulWidget {
   final String challengeId;
@@ -37,21 +38,24 @@ class _CommunityChallengeProgressPageState extends State<CommunityChallengeProgr
     _loadParticipants();
   }
 
+  /// ✅ 참가자 데이터를 안전하게 로드합니다.
   Future<void> _loadParticipants() async {
     final snapshot = await _participantsRef.get();
-    if (snapshot.exists && snapshot.value != null) {
-      final raw = Map<String, dynamic>.from(snapshot.value as Map);
+    
+    // ✅ 표준화된 데이터 처리 사용
+    final participantsMap = FirebaseDataUtils.getMapFromSnapshot(snapshot);
 
+    if (mounted) {
       setState(() {
-        participants = raw;
-        total = raw.length;
-        completed = raw.values.where((v) => v['done'] == true).length;
+        participants = participantsMap;
+        total = participantsMap.length;
+        completed = participantsMap.values.where((v) => v['done'] == true).length;
 
-        final myData = raw[widget.userId];
+        final myData = participantsMap[widget.userId];
         if (myData != null) {
           myOrder = myData['order'] ?? -1;
           myDone = myData['done'] ?? false;
-          final othersBeforeMe = raw.values.where((v) =>
+          final othersBeforeMe = participantsMap.values.where((v) =>
           (v['order'] as int) < myOrder && (v['done'] == false));
           myTurn = othersBeforeMe.isEmpty && !myDone;
         }
@@ -59,12 +63,25 @@ class _CommunityChallengeProgressPageState extends State<CommunityChallengeProgr
     }
   }
 
+  /// ✅ 미션 완료 처리
   Future<void> _markAsDone() async {
-    await _participantsRef.child(widget.userId).update({'done': true});
-    await _loadParticipants();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('미션 완료로 표시되었습니다!')),
-    );
+    try {
+      await _participantsRef.child(widget.userId).update({'done': true});
+      await _loadParticipants();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('미션 완료로 표시되었습니다!')),
+        );
+      }
+    } catch (e) {
+      print('❌ 미션 완료 처리 오류: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('미션 완료 처리 중 오류가 발생했습니다.')),
+        );
+      }
+    }
   }
 
   @override

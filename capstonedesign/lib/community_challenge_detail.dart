@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'community_challenge_progress.dart';
+import 'utils/firebase_data_utils.dart';
 
 class CommunityChallengeDetailPage extends StatefulWidget {
   final String challengeId;
@@ -23,34 +24,32 @@ class CommunityChallengeDetailPage extends StatefulWidget {
 class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailPage> {
   bool _isJoining = false;
 
+  /// 챌린지 참가 상태를 확인하고 적절한 화면으로 이동합니다.
   Future<void> _checkAndJoinChallenge(BuildContext context) async {
     final userRef = FirebaseDatabase.instance.ref('users/${widget.userId}/currentChallenges');
     final snapshot = await userRef.get();
 
-    List<dynamic> existing = [];
-    if (snapshot.exists && snapshot.value != null) {
-      if (snapshot.value is List) {
-        existing = List<dynamic>.from(snapshot.value as List);
-      } else if (snapshot.value is Map) {
-        existing = List<dynamic>.from((snapshot.value as Map).values);
-      }
-    }
-
+    // ✅ 표준화된 데이터 처리 사용
+    final existing = FirebaseDataUtils.getListFromSnapshot(snapshot);
     final String challengeName = widget.challenge['name'] ?? '';
 
-    if (existing.contains(challengeName)) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => CommunityChallengeProgressPage(
-            challengeId: widget.challengeId,
-            challenge: widget.challenge,
-            userId: widget.userId,
-            nickname: widget.nickname,
+    if (FirebaseDataUtils.safeContains(existing, challengeName)) {
+      // ✅ 이미 참가한 경우: 바로 진행 화면으로 이동
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CommunityChallengeProgressPage(
+              challengeId: widget.challengeId,
+              challenge: widget.challenge,
+              userId: widget.userId,
+              nickname: widget.nickname,
+            ),
           ),
-        ),
-      );
+        );
+      }
     } else {
+      // ✅ 참가하지 않은 경우: 다이얼로그 표시
       _showJoinDialog(context, challengeName);
     }
   }
@@ -78,43 +77,43 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
     );
   }
 
+  /// ✅ 참가 처리 및 이동
   Future<void> _joinChallenge(BuildContext context) async {
+    if (_isJoining) return; // ✅ 중복 실행 방지
+    
     setState(() => _isJoining = true);
 
-    final userRef = FirebaseDatabase.instance.ref('users/${widget.userId}/currentChallenges');
-    final snapshot = await userRef.get();
-
-    List<dynamic> existing = [];
-    if (snapshot.exists && snapshot.value != null) {
-      if (snapshot.value is List) {
-        existing = snapshot.value as List;
-      } else if (snapshot.value is Map) {
-        existing = (snapshot.value as Map).values.toList();
-      }
-    }
-
-    final String challengeName = widget.challenge['name'] ?? '';
-
     try {
-      if (!existing.contains(challengeName)) {
-        existing.add(challengeName);
-        await userRef.set(existing);
+      final userRef = FirebaseDatabase.instance.ref('users/${widget.userId}/currentChallenges');
+      final snapshot = await userRef.get();
 
+      // ✅ 표준화된 데이터 처리 사용
+      final existing = FirebaseDataUtils.getListFromSnapshot(snapshot);
+      final String challengeName = widget.challenge['name'] ?? '';
+
+      if (!FirebaseDataUtils.safeContains(existing, challengeName)) {
+        // 사용자의 현재 챌린지 목록에 추가
+        final updatedList = FirebaseDataUtils.safeAdd(existing, challengeName);
+        await userRef.set(updatedList);
+
+        // 챌린지 참가자 목록에 추가
         final participantsRef = FirebaseDatabase.instance
             .ref('challenges/${widget.challengeId}/participants');
 
         final participantSnapshot = await participantsRef.get();
-        final currentOrder = participantSnapshot.exists
-            ? (participantSnapshot.value as Map).length
-            : 0;
+        final participantsMap = FirebaseDataUtils.getMapFromSnapshot(participantSnapshot);
+        final currentOrder = participantsMap.length;
 
         await participantsRef.child(widget.userId).set({
           'nickname': widget.nickname,
           'order': currentOrder,
           'done': false,
         });
+
+        print('✅ 챌린지에 새로 참가 완료');
       }
 
+      // ✅ 화면 이동 (context.mounted 체크)
       if (context.mounted) {
         Navigator.pushReplacement(
           context,
@@ -130,12 +129,17 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
       }
     } catch (e) {
       print('❌ Firebase 오류: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('챌린지 참가 처리 중 오류가 발생했습니다.')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('챌린지 참가 처리 중 오류가 발생했습니다.')),
+        );
+      }
+    } finally {
+      // ✅ 상태 복원 보장
+      if (mounted) {
+        setState(() => _isJoining = false);
+      }
     }
-
-    setState(() => _isJoining = false);
   }
 
   void _confirmDelete(BuildContext context) {
@@ -162,30 +166,31 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
     );
   }
 
+  /// ✅ 챌린지 삭제 처리
   Future<void> _deleteChallenge(BuildContext context) async {
     try {
+      // 챌린지 데이터 삭제
       final challengeRef = FirebaseDatabase.instance.ref('challenges/${widget.challengeId}');
       await challengeRef.remove();
 
+      // 참가자들의 currentChallenges에서 제거
       final participantsRef =
       FirebaseDatabase.instance.ref('challenges/${widget.challengeId}/participants');
       final participantSnapshot = await participantsRef.get();
 
       if (participantSnapshot.exists) {
-        final participants = (participantSnapshot.value as Map).keys;
-        for (var userId in participants) {
+        final participantsMap = FirebaseDataUtils.getMapFromSnapshot(participantSnapshot);
+        final participantIds = participantsMap.keys;
+        
+        for (var userId in participantIds) {
           final userChallengeRef =
           FirebaseDatabase.instance.ref('users/$userId/currentChallenges');
           final snapshot = await userChallengeRef.get();
+          
           if (snapshot.exists) {
-            List<dynamic> updatedList = [];
-            if (snapshot.value is List) {
-              updatedList = List.from(snapshot.value as List)
-                ..remove(widget.challenge['name']);
-            } else if (snapshot.value is Map) {
-              updatedList = List.from((snapshot.value as Map).values)
-                ..remove(widget.challenge['name']);
-            }
+            // ✅ 표준화된 데이터 처리 사용
+            final currentChallenges = FirebaseDataUtils.getListFromSnapshot(snapshot);
+            final updatedList = FirebaseDataUtils.safeRemove(currentChallenges, widget.challenge['name']);
             await userChallengeRef.set(updatedList);
           }
         }
@@ -199,9 +204,11 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
       }
     } catch (e) {
       print('❌ 삭제 오류: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('챌린지 삭제 중 오류가 발생했습니다.')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('챌린지 삭제 중 오류가 발생했습니다.')),
+        );
+      }
     }
   }
 
@@ -210,7 +217,7 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
     final String name = widget.challenge['name'] ?? '';
     final String region = widget.challenge['region'] ?? '';
     final String description = widget.challenge['description'] ?? '';
-    final String creatorId = widget.challenge['creatorId'] ?? '';
+    final String creatorId = widget.challenge['createdByUserId'] ?? '';
 
     const String relayGuide = '''
 동네 청소 릴레이는 지역 기반 팀을 꾸려 릴레이 형식으로 이어가는 챌린지입니다.
