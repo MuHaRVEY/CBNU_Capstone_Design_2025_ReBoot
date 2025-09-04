@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
+import 'google_map_service.dart';
 
 class NavigationScreen extends StatefulWidget {
   final List<LatLng> routePoints;
@@ -16,7 +17,6 @@ class NavigationScreen extends StatefulWidget {
 }
 
 class _NavigationScreenState extends State<NavigationScreen> {
-  GoogleMapController? mapController;
   Location location = Location();
   LocationData? currentLocation;
   Set<Polyline> polylines = {};
@@ -71,7 +71,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
       currentLocation = locData;
       LatLng currentLatLng = LatLng(locData.latitude!, locData.longitude!);
 
-      mapController?.animateCamera(
+      GoogleMapService().controller?.animateCamera(
         CameraUpdate.newLatLng(currentLatLng),
       );
 
@@ -166,7 +166,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 zoom: 15,
               ),
               polylines: polylines,
-              onMapCreated: (controller) => mapController = controller,
+              onMapCreated: (controller) => GoogleMapService().setController(controller),
               myLocationEnabled: true,
               myLocationButtonEnabled: true,
             ),

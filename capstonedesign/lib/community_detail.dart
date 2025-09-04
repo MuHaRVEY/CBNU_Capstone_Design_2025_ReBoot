@@ -48,8 +48,7 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
   }
 
   void _listenLikes() {
-    _dbRef.child('community_posts/${widget.postId}/likeCount')
-        .onValue.listen((event) {
+    _dbRef.child('community_posts/${widget.postId}/likeCount').onValue.listen((event) {
       setState(() {
         likeCount = (event.snapshot.value ?? 0) as int;
       });
@@ -152,20 +151,61 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('게시글 수정'),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          title: const Text(
+            '게시글 수정',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: titleController, decoration: const InputDecoration(labelText: '제목')),
-                TextField(controller: contentController, decoration: const InputDecoration(labelText: '내용'), maxLines: 5),
-                TextField(controller: regionController, decoration: const InputDecoration(labelText: '지역')),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: titleController,
+                  decoration: InputDecoration(
+                    labelText: '제목',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: contentController,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    labelText: '내용',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: regionController,
+                  decoration: InputDecoration(
+                    labelText: '지역',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                ),
               ],
             ),
           ),
+          actionsPadding: const EdgeInsets.only(right: 16, bottom: 12),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
             TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade600,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
               onPressed: () async {
                 await _dbRef.child('community_posts/${widget.postId}').update({
                   'title': titleController.text.trim(),
@@ -187,11 +227,11 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     if (timestamp == null) return '';
     if (timestamp is int) {
       final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-      return DateFormat('yyyy년 MM월 dd일 HH:mm').format(dt);
+      return DateFormat('yyyy.MM.dd HH:mm').format(dt);
     } else if (timestamp is String) {
       try {
         final dt = DateTime.parse(timestamp);
-        return DateFormat('yyyy년 MM월 dd일 HH:mm').format(dt);
+        return DateFormat('yyyy.MM.dd HH:mm').format(dt);
       } catch (e) {
         return timestamp.toString();
       }
@@ -203,93 +243,127 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
   Widget build(BuildContext context) {
     if (postData == null) {
       return Scaffold(
+        backgroundColor: Colors.white,
         appBar: AppBar(title: const Text('게시글 상세')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('게시글 상세'),
-        actions: [
-          if (postData!['userId'] == widget.userId)
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'edit') _showEditDialog();
-                if (value == 'delete') _confirmDelete();
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'edit', child: Text('수정')),
-                PopupMenuItem(value: 'delete', child: Text('삭제')),
-              ],
-            ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(postData!['title'] ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text('작성자: ${postData!['nickname'] ?? '익명'}'),
-            Text('지역: ${postData!['region'] ?? '미지정'}'),
-            Text('작성일: ${_formatTimestamp(postData!['createdAt'])}'),
-            const SizedBox(height: 16),
-            if (postData!['imageUrl'] != null && (postData!['imageUrl'] as String).isNotEmpty)
-              Image.network(postData!['imageUrl'], height: 200, fit: BoxFit.cover),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                IconButton(
-                  icon: Icon(
-                    isLiked ? Icons.favorite : Icons.favorite_border,
-                    color: Colors.red,
-                  ),
-                  onPressed: _toggleLike,
-                ),
-                Text('$likeCount'),
-                const SizedBox(width: 16),
-                const Icon(Icons.comment, color: Colors.blue),
-                Text('$commentCount'),
-              ],
-            ),
-            const Divider(),
-            const Text('댓글', style: TextStyle(fontWeight: FontWeight.bold)),
-            Expanded(
-              child: comments.isEmpty
-                  ? const Center(child: Text('아직 댓글이 없습니다.'))
-                  : ListView.builder(
-                itemCount: comments.length,
-                itemBuilder: (context, index) {
-                  final comment = comments[index];
-                  return ListTile(
-                    title: Text(comment['nickname'] ?? ''),
-                    subtitle: Text(comment['text'] ?? ''),
-                    trailing: Text(_formatTimestamp(comment['timestamp'])),
-                  );
+      backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,        // ✅ AppBar 배경 흰색으로 고정
+          foregroundColor: Colors.black,        // ✅ 아이콘/텍스트 색상 검정
+          elevation: 1,                          // ✅ 그림자 약간 추가로 구분감
+          title: const Text('게시글 상세'),
+          actions: [
+            if (postData!['userId'] == widget.userId)
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') _showEditDialog();
+                  if (value == 'delete') _confirmDelete();
                 },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'edit', child: Text('수정')),
+                  PopupMenuItem(value: 'delete', child: Text('삭제')),
+                ],
+              ),
+          ],
+        ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(postData!['title'] ?? '',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text('작성자: ${postData!['nickname'] ?? '익명'}'),
+                  Text('지역: ${postData!['region'] ?? '미지정'}'),
+                  Text('작성일: ${_formatTimestamp(postData!['createdAt'])}'),
+                  const SizedBox(height: 16),
+                  if (postData!['imageUrl'] != null && (postData!['imageUrl'] as String).isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        postData!['imageUrl'],
+                        fit: BoxFit.cover,
+                        height: 200,
+                        width: double.infinity,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          height: 200,
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.broken_image, size: 50),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Text(postData!['content'] ?? '',
+                      style: const TextStyle(fontSize: 15, height: 1.5)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(isLiked ? Icons.favorite : Icons.favorite_border,
+                            color: Colors.red),
+                        onPressed: _toggleLike,
+                      ),
+                      Text('$likeCount'),
+                      const SizedBox(width: 16),
+                      const Icon(Icons.comment, color: Colors.blue),
+                      Text('$commentCount'),
+                    ],
+                  ),
+                  const Divider(),
+                  const Text('댓글', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 10),
+                  ...comments.map((comment) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6.0),
+                      child: ListTile(
+                        title: Text(comment['nickname'] ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(comment['text'] ?? ''),
+                        trailing: Text(
+                          _formatTimestamp(comment['timestamp']),
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    );
+                  }),
+                ],
               ),
             ),
-            Row(
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _commentController,
-                    decoration: const InputDecoration(hintText: '댓글을 입력하세요'),
+                    decoration: InputDecoration(
+                      hintText: '댓글을 입력하세요',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.send),
+                  icon: const Icon(Icons.send, color: Colors.green),
                   onPressed: () => _addComment(_commentController.text),
-                )
+                ),
               ],
-            )
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
-
-
