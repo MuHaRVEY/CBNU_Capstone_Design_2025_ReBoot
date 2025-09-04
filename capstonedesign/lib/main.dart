@@ -20,21 +20,19 @@ void main() async {
     await Firebase.initializeApp();
   }
 
-
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => CoinProvider()..init(), //초기화 호출
-      child: RebootApp(),
-    ),
-  );
+  // ✅ SharedPreferences와 FirebaseAuth를 이용한 자동 로그인 확인
   final prefs = await SharedPreferences.getInstance();
   final autoLogin = prefs.getBool('autoLogin') ?? false;
   final currentUser = FirebaseAuth.instance.currentUser;
-
   final bool isLoggedIn = autoLogin && currentUser != null;
 
- // runApp(RebootApp(isLoggedIn: isLoggedIn));
-
+  // ✅ CoinProvider 초기화와 함께 앱 실행
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => CoinProvider()..init(),
+      child: RebootApp(isLoggedIn: isLoggedIn),
+    ),
+  );
 }
 
 class RebootApp extends StatelessWidget {
@@ -46,8 +44,8 @@ class RebootApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Re:Boot',
-      home: FirstPage(),
       debugShowCheckedModeBanner: false,
+      // ✅ 자동 로그인 여부에 따라 첫 화면 분기
       home: isLoggedIn ? const AutoLoginRedirect() : const FirstPage(),
     );
   }
