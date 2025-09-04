@@ -246,9 +246,9 @@ class _AdventurePageState extends State<AdventurePage> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('3초 안에 15번 눌러야 합니다!'),
+                  const Text('3초 안에 15번 눌러야 합니다!'),
                   Text('현재: $tapCount'),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   ElevatedButton(
                     onPressed: () {
                       setState(() {
@@ -256,7 +256,7 @@ class _AdventurePageState extends State<AdventurePage> {
                       });
                       showMonsterAttackedEffect();
                     },
-                    child: Text('눌러!'),
+                    child: const Text('눌러!'),
                   ),
                 ],
               );
@@ -287,7 +287,7 @@ class _AdventurePageState extends State<AdventurePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontWeight: FontWeight.bold)),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
         Container(
           width: 120,
           height: 10,
@@ -316,10 +316,10 @@ class _AdventurePageState extends State<AdventurePage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset('assets/images/trash_monster.png', width: 200, height: 200),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           ElevatedButton(
             onPressed: startBattle,
-            child: Text('배틀 시작'),
+            child: const Text('배틀 시작'),
           ),
         ],
       ),
@@ -389,7 +389,7 @@ class _AdventurePageState extends State<AdventurePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               buildHpBar(playerHp / 3, label: '내 강아지'),
-              SizedBox(height: 10),
+              const SizedBox(height: 10),
               ImageUtils.getOptimizedImage(
                 petImagePath,
                 width: 160,
@@ -468,16 +468,16 @@ class _AdventurePageState extends State<AdventurePage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    ElevatedButton(onPressed: startTapChallenge, child: Text('FIGHT1')),
-                    ElevatedButton(onPressed: startTrashDropChallenge, child: Text('FIGHT2')),
-                    ElevatedButton(onPressed: startMemoryChallenge, child: Text('FIGHT3')),
+                    ElevatedButton(onPressed: startTapChallenge, child: const Text('FIGHT1')),
+                    ElevatedButton(onPressed: startTrashDropChallenge, child: const Text('FIGHT2')),
+                    ElevatedButton(onPressed: startMemoryChallenge, child: const Text('FIGHT3')),
                   ],
                 ),
                 SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    ElevatedButton(onPressed: endBattle, child: Text('RUN')),
+                    ElevatedButton(onPressed: endBattle, child: const Text('RUN')),
                   ],
                 ),
               ],
@@ -492,12 +492,12 @@ class _AdventurePageState extends State<AdventurePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('모험')),
+      appBar: AppBar(title: const Text('모험')),
       body: hasMonster
           ? inBattle
           ? buildBattleView()
           : buildMonsterEncounter()
-          : Center(child: Text('주변에 몬스터가 없습니다.')),
+          : Center(child: const Text('주변에 몬스터가 없습니다.')),
     );
   }
 }
