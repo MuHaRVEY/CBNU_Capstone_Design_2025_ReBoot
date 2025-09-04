@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:intl/intl.dart';
+import 'utils/firebase_data_utils.dart';
 
 class CommunityDetailPage extends StatefulWidget {
   final String postId;
@@ -38,12 +39,21 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     _checkIfLiked();
   }
 
+  /// ✅ 게시글 데이터를 안전하게 로드합니다.
   Future<void> _loadPost() async {
-    final snapshot = await _dbRef.child('community_posts/${widget.postId}').get();
-    if (snapshot.exists) {
-      setState(() {
-        postData = snapshot.value as Map<dynamic, dynamic>;
-      });
+    try {
+      final snapshot = await _dbRef.child('community_posts/${widget.postId}').get();
+      
+      // ✅ 표준화된 데이터 처리 사용
+      final data = FirebaseDataUtils.getMapFromSnapshot(snapshot);
+      
+      if (mounted) {
+        setState(() {
+          postData = data;
+        });
+      }
+    } catch (e) {
+      print('❌ 게시글 로드 오류: $e');
     }
   }
 
@@ -84,31 +94,53 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     }
   }
 
+  /// ✅ 댓글 데이터를 안전하게 로드합니다.
   Future<void> _loadComments() async {
-    final snapshot = await _dbRef.child('commentsDetail/${widget.postId}').get();
-    if (snapshot.exists) {
-      final data = snapshot.value as Map<dynamic, dynamic>;
-      setState(() {
-        comments = data.values.map((e) => e as Map<dynamic, dynamic>).toList();
-      });
-    } else {
-      setState(() {
-        comments = [];
-      });
+    try {
+      final snapshot = await _dbRef.child('commentsDetail/${widget.postId}').get();
+      
+      // ✅ 표준화된 데이터 처리 사용
+      final data = FirebaseDataUtils.getMapFromSnapshot(snapshot);
+      
+      if (mounted) {
+        setState(() {
+          comments = data.values
+              .map((e) => Map<dynamic, dynamic>.from(e as Map))
+              .toList();
+        });
+      }
+    } catch (e) {
+      print('❌ 댓글 로드 오류: $e');
+      if (mounted) {
+        setState(() {
+          comments = [];
+        });
+      }
     }
   }
 
+  /// ✅ 댓글 수를 실시간으로 모니터링합니다.
   void _listenCommentsCount() {
     _dbRef.child('commentsDetail/${widget.postId}').onValue.listen((event) {
-      setState(() {
-        commentCount = event.snapshot.children.length;
-        if (event.snapshot.value != null) {
-          final data = event.snapshot.value as Map<dynamic, dynamic>;
-          comments = data.values.map((e) => e as Map<dynamic, dynamic>).toList();
-        } else {
-          comments = [];
+      try {
+        if (mounted) {
+          final data = FirebaseDataUtils.getMapFromSnapshot(event.snapshot);
+          
+          setState(() {
+            commentCount = event.snapshot.children.length;
+            comments = data.values
+                .map((e) => Map<dynamic, dynamic>.from(e as Map))
+                .toList();
+          });
         }
-      });
+      } catch (e) {
+        print('❌ 댓글 수 모니터링 오류: $e');
+        if (mounted) {
+          setState(() {
+            comments = [];
+          });
+        }
+      }
     });
   }
 
