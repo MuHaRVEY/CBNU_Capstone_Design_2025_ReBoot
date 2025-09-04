@@ -16,6 +16,19 @@ class ImageUtils {
     ),
   };
 
+  // Cache commonly used widgets to reduce rebuilds
+  static const Map<String, Widget> _cachedWidgets = {
+    'loading': Center(child: CircularProgressIndicator()),
+    'space_10': SizedBox(height: 10),
+    'space_20': SizedBox(height: 20),
+    'empty_expanded': Expanded(child: SizedBox()),
+  };
+
+  /// Get a cached widget
+  static Widget getCachedWidget(String key) {
+    return _cachedWidgets[key] ?? const SizedBox.shrink();
+  }
+
   /// Get a cached image or create a new one with optimized parameters
   static Widget getOptimizedImage(
     String assetPath, {
