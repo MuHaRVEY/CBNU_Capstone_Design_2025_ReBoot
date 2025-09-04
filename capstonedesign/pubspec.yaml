@@ -50,6 +50,12 @@ dependencies:
   # Internationalization (used for DateFormat)
   intl: ^0.20.2
 
+  # Shared preferences
+  shared_preferences: ^2.2.2
+
+  # Url launcher
+  url_launcher: ^6.2.5
+
   # Cupertino icons for iOS style widgets
   cupertino_icons: ^1.0.8
   google_maps_flutter: ^2.12.1

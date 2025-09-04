@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'find_password.dart';
 import 'find_id.dart';
@@ -10,6 +11,8 @@ import 'homepage.dart';
 import 'signup_page.dart';
 
 class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
   @override
   _LoginPageState createState() => _LoginPageState();
 }
@@ -39,6 +42,12 @@ class _LoginPageState extends State<LoginPage> {
       final uid = credential.user!.uid;
       final snapshot = await FirebaseDatabase.instance.ref("users/$uid/nickname").get();
       final nickname = snapshot.value?.toString() ?? '사용자';
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('autoLogin', _autoLogin);
+      if (_autoLogin) {
+        await prefs.setString('userId', uid);
+      }
 
       Navigator.pushReplacement(
         context,
@@ -78,6 +87,12 @@ class _LoginPageState extends State<LoginPage> {
         });
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('autoLogin', _autoLogin);
+      if (_autoLogin) {
+        await prefs.setString('userId', uid);
+      }
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -108,28 +123,28 @@ class _LoginPageState extends State<LoginPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   IconButton(
-                    icon: Icon(Icons.arrow_back),
+                    icon: const Icon(Icons.arrow_back),
                     onPressed: () => Navigator.pop(context),
                   ),
-                  SizedBox(height: 20),
-                  Text('로그인', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 40),
+                  const SizedBox(height: 20),
+                  const Text('로그인', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 40),
                   TextField(
                     controller: _emailController,
                     decoration: InputDecoration(
                       hintText: '이메일을 입력해주세요',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                       filled: true,
                       fillColor: Colors.white.withOpacity(0.8),
                     ),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   TextField(
                     controller: _pwController,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       hintText: '비밀번호를 입력해주세요',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                       filled: true,
                       fillColor: Colors.white.withOpacity(0.8),
                       suffixIcon: IconButton(
@@ -138,20 +153,20 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   if (_errorText.isNotEmpty)
-                    Text(_errorText, style: TextStyle(color: Colors.red)),
-                  SizedBox(height: 8),
+                    Text(_errorText, style: const TextStyle(color: Colors.red)),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Checkbox(
                         value: _autoLogin,
                         onChanged: (value) => setState(() => _autoLogin = value!),
                       ),
-                      Text('자동 로그인'),
+                      const Text('자동 로그인'),
                     ],
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -161,41 +176,53 @@ class _LoginPageState extends State<LoginPage> {
                         backgroundColor: Colors.green.shade600,
                         foregroundColor: Colors.white,
                       ),
-                      child: Text('로그인', style: TextStyle(fontSize: 16)),
+                      child: const Text('로그인', style: TextStyle(fontSize: 16)),
                     ),
                   ),
-                  SizedBox(height: 12),
+                  const SizedBox(height: 12),
                   if (!kIsWeb)
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton.icon(
                         onPressed: _handleGoogleLogin,
-                        icon: Image.asset('assets/images/image_google_icon.png', width: 24),
-                        label: Text('Google 계정으로 로그인'),
+                        icon: Image.asset(
+                          'assets/images/image_google_icon.png',
+                          width: 24,
+                        ),
+                        label: const Text('Google 계정으로 로그인'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.black,
                         ),
                       ),
                     ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       TextButton(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FindIdPage())),
-                        child: Text('ID 찾기'),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const FindIdPage()),
+                        ),
+                        child: const Text('ID 찾기'),
                       ),
-                      Text('|'),
+                      const Text('|'),
                       TextButton(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FindPasswordPage())),
-                        child: Text('PW 찾기'),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const FindPasswordPage()),
+                        ),
+                        child: const Text('PW 찾기'),
                       ),
-                      Text('|'),
+                      const Text('|'),
                       TextButton(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignupPage())),
-                        child: Text('회원가입'),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SignupPage()),
+                        ),
+                        child: const Text('회원가입'),
                       ),
                     ],
                   ),
