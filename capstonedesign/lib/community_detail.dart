@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 
 class CommunityDetailPage extends StatefulWidget {
   final String postId;
@@ -27,6 +28,10 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
   int likeCount = 0;
   int commentCount = 0;
   bool isLiked = false;
+  
+  // Stream subscriptions to prevent memory leaks
+  StreamSubscription<DatabaseEvent>? _likesSubscription;
+  StreamSubscription<DatabaseEvent>? _commentsSubscription;
 
   @override
   void initState() {
@@ -36,6 +41,15 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
     _listenLikes();
     _listenCommentsCount();
     _checkIfLiked();
+  }
+
+  @override
+  void dispose() {
+    // Cancel stream subscriptions to prevent memory leaks
+    _likesSubscription?.cancel();
+    _commentsSubscription?.cancel();
+    _commentController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPost() async {
@@ -48,10 +62,13 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
   }
 
   void _listenLikes() {
-    _dbRef.child('community_posts/${widget.postId}/likeCount').onValue.listen((event) {
-      setState(() {
-        likeCount = (event.snapshot.value ?? 0) as int;
-      });
+    _likesSubscription?.cancel(); // Cancel existing subscription
+    _likesSubscription = _dbRef.child('community_posts/${widget.postId}/likeCount').onValue.listen((event) {
+      if (mounted) {
+        setState(() {
+          likeCount = (event.snapshot.value ?? 0) as int;
+        });
+      }
     });
   }
 
@@ -99,16 +116,19 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
   }
 
   void _listenCommentsCount() {
-    _dbRef.child('commentsDetail/${widget.postId}').onValue.listen((event) {
-      setState(() {
-        commentCount = event.snapshot.children.length;
-        if (event.snapshot.value != null) {
-          final data = event.snapshot.value as Map<dynamic, dynamic>;
-          comments = data.values.map((e) => e as Map<dynamic, dynamic>).toList();
-        } else {
-          comments = [];
-        }
-      });
+    _commentsSubscription?.cancel(); // Cancel existing subscription
+    _commentsSubscription = _dbRef.child('commentsDetail/${widget.postId}').onValue.listen((event) {
+      if (mounted) {
+        setState(() {
+          commentCount = event.snapshot.children.length;
+          if (event.snapshot.value != null) {
+            final data = event.snapshot.value as Map<dynamic, dynamic>;
+            comments = data.values.map((e) => e as Map<dynamic, dynamic>).toList();
+          } else {
+            comments = [];
+          }
+        });
+      }
     });
   }
 
