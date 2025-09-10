@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'find_password.dart';
 import 'find_id.dart';
-import 'homepage.dart';
+import 'package:capstonedesign/Homepage/homepage.dart';
 import 'signup_page.dart';
 
 class LoginPage extends StatefulWidget {

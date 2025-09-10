@@ -8,7 +8,7 @@ import 'community_newthings.dart';
 import 'community_detail.dart';
 import 'community_challenge.dart';
 import 'community_makechallenge.dart';
-import 'community_ad_wrapper.dart';
+import 'Ads/community_ad_wrapper.dart';
 
 class CommunityEntireTab extends StatelessWidget {
   final void Function(String postId) openDetailPage;

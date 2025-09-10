@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'my_page.dart';
-import 'community_entire.dart';
-import 'gamepage.dart'; // gmepage import 추가
-import 'gpt_map.dart';
+import 'Mypage/my_page.dart';
+import 'Community/community_entire.dart';
+import '../Game/gamepage.dart'; // gmepage import 추가
+import 'Flogging/gpt_map.dart';
 
 class HomePage extends StatelessWidget {
   final String userId;

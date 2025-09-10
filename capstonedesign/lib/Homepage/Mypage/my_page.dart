@@ -5,9 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'community_detail.dart';
-import 'community_challenge_detail.dart';
-
+import 'package:capstonedesign/Homepage/Community/community_detail.dart';
+import 'package:capstonedesign/Homepage/Community/community_challenge_detail.dart';
 class MyPage extends StatefulWidget {
   final String userId;
   final String nickname;
