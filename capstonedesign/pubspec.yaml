@@ -30,8 +30,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  sliding_up_panel: ^2.0.0
-
+  tflite_flutter: ^0.11.0
+  camera: ^0.10.6
+  image: ^3.3.0
   # Firebase core services
 
   firebase_core: ^3.13.1
@@ -81,6 +82,8 @@ dev_dependencies:
 flutter:
   assets:
     - assets/images/
+    - assets/labels.json
+    - assets/trash_classifier_fp16.tflite
 #    - assets/images/image_firstpage_login.png
 #    - assets/images/image_app_homepage.png
 #    - assets/images/image_app_start.png

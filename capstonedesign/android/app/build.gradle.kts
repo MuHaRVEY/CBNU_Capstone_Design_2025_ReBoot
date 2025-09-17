@@ -10,9 +10,9 @@ plugins {
 
 android {
     namespace = "com.dev.capstone.capstonedesign"
-    compileSdk = 35
-    ndkVersion = flutter.ndkVersion
-    //ndkVersion = "27.0.12077973" // ✅ 이 줄을 추가하세요
+    compileSdk = 36
+//    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -29,6 +29,9 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
 //        minSdk = flutter.minSdkVersion
         minSdk = 23
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
