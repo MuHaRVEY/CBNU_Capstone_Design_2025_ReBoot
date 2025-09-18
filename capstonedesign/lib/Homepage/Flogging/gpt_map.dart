@@ -9,6 +9,8 @@ import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'navigator.dart';
 import 'dart:ui';
 import 'google_map_service.dart';
+import 'package:capstonedesign/common/utils/stationary_detector.dart'; //정지 감지 추가 [add by Useok]
+import 'package:capstonedesign/Game/gamepage.dart'; //불러올 게임 추가 [add by Useok]
 
 class PolylineMapScreen extends StatefulWidget {
   const PolylineMapScreen({super.key});
@@ -17,11 +19,14 @@ class PolylineMapScreen extends StatefulWidget {
   _PolylineMapScreenState createState() => _PolylineMapScreenState();
 }
 
-class _PolylineMapScreenState extends State<PolylineMapScreen> {
+// class _PolylineMapScreenState extends State<PolylineMapScreen> { // 기존
+class _PolylineMapScreenState extends State<PolylineMapScreen>
+    with SingleTickerProviderStateMixin { //프레임마다 시간 신호(tick)를 받아 움직이게 하기 위해 Ticker을 만들 Provider을 추가
   Set<Polyline> polylines = {};
   LatLng? currentPosition;
   Location location = Location();
-  final TextEditingController radiusController = TextEditingController(text: '200');
+  final TextEditingController radiusController = TextEditingController(
+      text: '200');
   final PanelController panelController = PanelController();
 
   double _panelSlidePosition = 0.0; // 0.0 ~ 1.0
@@ -31,10 +36,79 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
   bool _isRouteReady = false;
   List<LatLng> _routePoints = [];
 
+  // [ADD by Useok] 정지 감지 + 버튼/애니메이션 상태
+  final _detector = StationaryDetector(
+    window: const Duration(seconds: 5),
+    distThreshold: 2.0,
+    speedThreshold: 0.5,
+  );
+  bool _showGameButton = false;
+  late AnimationController _pulseCtrl;
+  late Animation<double> _scaleAnim;
+  DateTime? _buttonShownAt;
+
+
   @override
   void initState() {
     super.initState();
     requestLocation();
+    // ==============================================
+    // [ADD] 위치 스트림 구독 (5초 정지 감지)
+    _subscribeLocation();
+
+    // [ADD] 버튼 펄스 애니메이션 (등장 후 3초간 두드러지게)
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )
+      ..repeat(reverse: true);
+    _scaleAnim = Tween<double>(begin: 0.9, end: 1.1).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+// [ADD]
+  void _subscribeLocation() async {
+    // 권한/서비스 체크는 requestLocation에서 처리됨. 여기선 스트림만.
+    location.changeSettings(
+      accuracy: LocationAccuracy.high,
+      interval: 1000, // 1초마다
+      distanceFilter: 0, // 모든 업데이트 받기
+    );
+
+    location.onLocationChanged.listen((loc) {
+      final lat = loc.latitude;
+      final lon = loc.longitude;
+      if (lat == null || lon == null) return;
+
+      // 화면 이동용 현재 위치 업데이트
+      setState(() {
+        currentPosition = LatLng(lat, lon);
+      });
+
+      final nowMs = DateTime
+          .now()
+          .millisecondsSinceEpoch;
+      final isStill = _detector.add(lat, lon, loc.speed, nowMs);
+
+      // 5초 정지되면 버튼 노출 + 타임스탬프 기록
+      if (isStill && !_showGameButton) {
+        setState(() {
+          _showGameButton = true;
+          _buttonShownAt = DateTime.now();
+        });
+      }
+
+      // 움직이기 시작하면 버튼 숨김 및 리셋
+      if (!isStill && _showGameButton) {
+        setState(() {
+          _showGameButton = false;
+          _buttonShownAt = null;
+        });
+        _detector.reset();
+      }
+    });
+    // ==============================================
   }
 
   Future<void> requestLocation() async {
@@ -115,9 +189,52 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
   @override
   void dispose() {
     radiusController.dispose();
+    _pulseCtrl.dispose();     // [ADD by useok]
     super.dispose();
   }
+  // [ADD by useok] 버튼 위젯 ========================================
+  Widget _buildGameButton() {
+    if (!_showGameButton) return const SizedBox.shrink();
 
+    // 등장 후 3초 동안은 더 눈에 띄게(=펄스) 보여주고, 이후엔 자연스러운 반복
+    final visibleFor = _buttonShownAt == null
+        ? const Duration(seconds: 0)
+        : DateTime.now().difference(_buttonShownAt!);
+
+    // 3초 펄스 강조 후에도 버튼은 계속 보이게 유지 (요구사항 해석상 “3초 정도 펄스하며 나타남”)
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: lerpDouble(minPanelHeight + 100, maxPanelHeight + 100, _panelSlidePosition)!,
+        ),
+        child: AnimatedScale(
+          scale: _scaleAnim.value,
+          duration: const Duration(milliseconds: 0),
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 6,
+            ),
+            onPressed: () {
+              // 게임 시작으로 이동
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => GamePage()),
+              );
+            },
+            icon: const Icon(Icons.sports_esports),
+            label: Text(
+              visibleFor.inSeconds < 3 ? '게임 시작 (준비 완료!)' : '게임 시작',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  // =================================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -225,6 +342,11 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                     child: Icon(Icons.my_location),
                   ),
                 ),
+      // [ADD] 정지 시 나타나는 “게임 시작” 버튼 (펄스)
+      AnimatedBuilder(
+        animation: _pulseCtrl,
+        builder: (_, __) => _buildGameButton(),
+      ),
               ],
             ),
     );
