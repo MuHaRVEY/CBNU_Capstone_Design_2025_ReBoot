@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'firebase/firebase_options.dart';
 import 'package:provider/provider.dart';
 import 'package:capstonedesign/Game/coin_provider.dart';
 import 'first_page.dart';
