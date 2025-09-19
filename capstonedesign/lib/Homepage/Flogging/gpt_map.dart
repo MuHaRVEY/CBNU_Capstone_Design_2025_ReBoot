@@ -78,6 +78,8 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final encoded = data['encoded_polyline'];
+        final total_length = data['total_length'];
+        final walking_time_min = data['walking_time_min'];
 
         PolylinePoints polylinePoints = PolylinePoints();
         List<PointLatLng> result = polylinePoints.decodePolyline(encoded);
