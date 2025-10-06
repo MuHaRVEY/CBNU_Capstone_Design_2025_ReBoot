@@ -10,7 +10,7 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- ✅ uses-feature는 반드시 manifest 루트에 -->
+    
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
 
@@ -18,6 +18,15 @@
         android:label="capstonedesign"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+
+        <meta-data 
+            android:name="io.flutter.embedding.android.FlutterSurfaceView" 
+            android:value="true"/>
 
         <!-- Google Maps API 키 -->
         <meta-data
