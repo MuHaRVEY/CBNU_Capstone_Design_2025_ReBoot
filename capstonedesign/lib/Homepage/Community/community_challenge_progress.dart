@@ -16,133 +16,124 @@ class CommunityChallengeProgressPage extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<CommunityChallengeProgressPage> createState() => _CommunityChallengeProgressPageState();
+  State<CommunityChallengeProgressPage> createState() =>
+      _CommunityChallengeProgressPageState();
 }
 
-class _CommunityChallengeProgressPageState extends State<CommunityChallengeProgressPage> {
-  late DatabaseReference _participantsRef;
-
-  Map<String, dynamic> participants = {};
-  int myOrder = -1;
-  bool myDone = false;
-  bool myTurn = false;
-  int total = 0;
-  int completed = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _participantsRef = FirebaseDatabase.instance
-        .ref('challenges/${widget.challengeId}/participants');
-    _loadParticipants();
-  }
-
-  Future<void> _loadParticipants() async {
-    final snapshot = await _participantsRef.get();
-    if (snapshot.exists && snapshot.value != null) {
-      final raw = Map<String, dynamic>.from(snapshot.value as Map);
-
-      setState(() {
-        participants = raw;
-        total = raw.length;
-        completed = raw.values.where((v) => v['done'] == true).length;
-
-        final myData = raw[widget.userId];
-        if (myData != null) {
-          myOrder = myData['order'] ?? -1;
-          myDone = myData['done'] ?? false;
-          final othersBeforeMe = raw.values.where((v) =>
-          (v['order'] as int) < myOrder && (v['done'] == false));
-          myTurn = othersBeforeMe.isEmpty && !myDone;
-        }
-      });
-    }
-  }
-
-  Future<void> _markAsDone() async {
-    await _participantsRef.child(widget.userId).update({'done': true});
-    await _loadParticipants();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('미션 완료로 표시되었습니다!')),
-    );
-  }
-
+class _CommunityChallengeProgressPageState
+    extends State<CommunityChallengeProgressPage> {
   @override
   Widget build(BuildContext context) {
-    final String name = widget.challenge['name'] ?? '';
-    final String region = widget.challenge['region'] ?? '';
-    final String description = widget.challenge['description'] ?? '';
-
-    final sortedEntries = participants.entries.toList()
-      ..sort((a, b) => (a.value['order'] as int).compareTo(b.value['order'] as int));
+    final challengeRef =
+        FirebaseDatabase.instance.ref('challenges/${widget.challengeId}');
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('$name 진행 중'),
+        title: Text("${widget.challenge['name']} 진행"),
         backgroundColor: Colors.green.shade600,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('🏘️ 지역: $region', style: const TextStyle(fontSize: 18)),
-            const SizedBox(height: 10),
-            Text('📌 설명: $description', style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 20),
-            const Divider(thickness: 1.2),
+      body: StreamBuilder<DatabaseEvent>(
+        stream: challengeRef.onValue,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+            return const Center(child: Text("데이터 없음"));
+          }
 
-            Text('팀원 진행 현황', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            LinearProgressIndicator(
-              value: total > 0 ? completed / total : 0,
-              minHeight: 10,
-              backgroundColor: Colors.grey[300],
-              color: Colors.green,
-            ),
-            const SizedBox(height: 10),
-            Text('총 $total명 중 $completed명 완료'),
+          final data =
+              Map<String, dynamic>.from(snapshot.data!.snapshot.value as Map);
+          final participants =
+              Map<String, dynamic>.from(data['participants'] ?? {});
+          final required =
+              (data['requiredParticipants'] as num?)?.toInt() ?? 0;
+          final started = data['started'] == true;
 
-            const SizedBox(height: 30),
-            if (myTurn)
-              ElevatedButton.icon(
-                onPressed: _markAsDone,
-                icon: const Icon(Icons.cleaning_services),
-                label: const Text('내 순서! 미션 완료하기'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade600,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              )
-            else if (myDone)
-              const Text('✅ 미션 완료됨', style: TextStyle(fontSize: 16, color: Colors.green))
-            else
-              const Text('⏳ 아직 내 차례가 아닙니다.', style: TextStyle(fontSize: 16, color: Colors.orange)),
-
-            const SizedBox(height: 30),
-            const Divider(thickness: 1.2),
-            const Text('참가자 순서', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Expanded(
-              child: ListView(
-                children: sortedEntries.map<Widget>((e) {
-                  final nickname = e.value['nickname'] ?? '이름 없음';
-                  final done = e.value['done'] == true;
-                  final order = e.value['order'];
-                  return ListTile(
-                    leading: CircleAvatar(child: Text('${order + 1}')),
-                    title: Text(nickname),
-                    trailing: Icon(
-                      done ? Icons.check_circle : Icons.hourglass_bottom,
-                      color: done ? Colors.green : Colors.grey,
-                    ),
-                  );
-                }).toList(),
+          // ✅ 모집 대기 화면
+          if (!started) {
+            return Center(
+              child: Text(
+                "⏳ 참가자 모집 중...\n(${participants.length} / $required 명)",
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
               ),
+            );
+          }
+
+          // ✅ 진행 화면
+          final totalTarget = participants.length * 1000; // 참가자 수 × 1km
+          final totalDone = participants.values.fold<int>(
+            0,
+            (sum, p) => sum + (p['ploggedDistance'] as int? ?? 0),
+          );
+
+          final sortedEntries = participants.entries.toList()
+            ..sort((a, b) => (a.value['order'] as num).compareTo(b.value['order'] as num));
+
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ✅ 전체 진행률
+                Text("전체 진행 상황",
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                LinearProgressIndicator(
+                  value: totalTarget > 0 ? totalDone / totalTarget : 0,
+                  minHeight: 12,
+                  backgroundColor: Colors.grey[300],
+                  color: Colors.green,
+                ),
+                const SizedBox(height: 8),
+                Text("총 ${totalTarget ~/ 1000}km 중 ${(totalDone / 1000).toStringAsFixed(1)}km 완료"),
+
+                const SizedBox(height: 20),
+                const Divider(thickness: 1.2),
+                const Text("참가자 현황",
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+
+                // ✅ 참가자 리스트
+                Expanded(
+                  child: ListView(
+                    children: sortedEntries.map((e) {
+                      final nickname = e.value['nickname'] ?? '이름 없음';
+                      final assigned = 1000; // 항상 1km
+                      final done =
+                          (e.value['ploggedDistance'] as num?)?.toInt() ?? 0;
+                      final isCompleted = done >= assigned;
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor:
+                                isCompleted ? Colors.green : Colors.orange,
+                            child: Text(
+                                "${(done / 1000).toStringAsFixed(1)}"),
+                          ),
+                          title: Text(nickname),
+                          subtitle: Text(
+                              "목표: 1km | 진행: ${(done / 1000).toStringAsFixed(2)}km"),
+                          trailing: isCompleted
+                              ? const Text("✅ 완료",
+                                  style: TextStyle(
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.bold))
+                              : Text(
+                                  "${((assigned - done) / 1000).toStringAsFixed(2)}km 남음",
+                                  style: const TextStyle(color: Colors.orange),
+                                ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

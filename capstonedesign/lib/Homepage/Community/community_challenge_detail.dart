@@ -17,29 +17,51 @@ class CommunityChallengeDetailPage extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<CommunityChallengeDetailPage> createState() => _CommunityChallengeDetailPageState();
+  State<CommunityChallengeDetailPage> createState() =>
+      _CommunityChallengeDetailPageState();
 }
 
-class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailPage> {
+class _CommunityChallengeDetailPageState
+    extends State<CommunityChallengeDetailPage> {
   bool _isJoining = false;
 
-  Future<void> _checkAndJoinChallenge(BuildContext context) async {
-    final userRef = FirebaseDatabase.instance.ref('users/${widget.userId}/currentChallenges');
-    final snapshot = await userRef.get();
+  /// ✅ 참가 처리
+  Future<void> _joinChallenge(BuildContext context) async {
+    setState(() => _isJoining = true);
 
-    List<dynamic> existing = [];
-    if (snapshot.exists && snapshot.value != null) {
-      if (snapshot.value is List) {
-        existing = List<dynamic>.from(snapshot.value as List);
-      } else if (snapshot.value is Map) {
-        existing = List<dynamic>.from((snapshot.value as Map).values);
+    final challengeRef =
+        FirebaseDatabase.instance.ref('challenges/${widget.challengeId}');
+    final participantsRef = challengeRef.child('participants');
+
+    // 현재 참가자 수 확인
+    final participantSnapshot = await participantsRef.get();
+    final currentCount = participantSnapshot.exists
+        ? (participantSnapshot.value as Map).length
+        : 0;
+
+    // ✅ 참가자 등록
+    await participantsRef.child(widget.userId).set({
+      'nickname': widget.nickname,
+      'assignedDistance': 1000, // 항상 1km
+      'ploggedDistance': 0,
+      'done': false,
+      'order': currentCount,
+    });
+
+    // ✅ 모집 인원 다 찼는지 확인
+    final challengeSnapshot = await challengeRef.get();
+    if (challengeSnapshot.exists) {
+      final data = Map<String, dynamic>.from(challengeSnapshot.value as Map);
+      final required = (data['requiredParticipants'] as num?)?.toInt() ?? 0;
+
+      if (currentCount + 1 >= required) {
+        await challengeRef.update({'started': true});
       }
     }
 
-    final String challengeName = widget.challenge['name'] ?? '';
-
-    if (existing.contains(challengeName)) {
-      Navigator.push(
+    // ✅ 진행 페이지로 이동
+    if (context.mounted) {
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => CommunityChallengeProgressPage(
@@ -50,159 +72,9 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
           ),
         ),
       );
-    } else {
-      _showJoinDialog(context, challengeName);
-    }
-  }
-
-  void _showJoinDialog(BuildContext context, String challengeName) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('챌린지 참가'),
-        content: Text('$challengeName에 참가하시겠습니까?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await _joinChallenge(context);
-            },
-            child: const Text('참가'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _joinChallenge(BuildContext context) async {
-    setState(() => _isJoining = true);
-
-    final userRef = FirebaseDatabase.instance.ref('users/${widget.userId}/currentChallenges');
-    final snapshot = await userRef.get();
-
-    List<dynamic> existing = [];
-    if (snapshot.exists && snapshot.value != null) {
-      if (snapshot.value is List) {
-        existing = snapshot.value as List;
-      } else if (snapshot.value is Map) {
-        existing = (snapshot.value as Map).values.toList();
-      }
-    }
-
-    final String challengeName = widget.challenge['name'] ?? '';
-
-    try {
-      if (!existing.contains(challengeName)) {
-        existing.add(challengeName);
-        await userRef.set(existing);
-
-        final participantsRef = FirebaseDatabase.instance
-            .ref('challenges/${widget.challengeId}/participants');
-
-        final participantSnapshot = await participantsRef.get();
-        final currentOrder = participantSnapshot.exists
-            ? (participantSnapshot.value as Map).length
-            : 0;
-
-        await participantsRef.child(widget.userId).set({
-          'nickname': widget.nickname,
-          'order': currentOrder,
-          'done': false,
-        });
-      }
-
-      if (context.mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CommunityChallengeProgressPage(
-              challengeId: widget.challengeId,
-              challenge: widget.challenge,
-              userId: widget.userId,
-              nickname: widget.nickname,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ Firebase 오류: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('챌린지 참가 처리 중 오류가 발생했습니다.')),
-      );
     }
 
     setState(() => _isJoining = false);
-  }
-
-  void _confirmDelete(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('챌린지 삭제'),
-        content: const Text('정말 이 챌린지를 삭제하시겠습니까?\n참여한 모든 사용자에게서도 제거됩니다.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await _deleteChallenge(context);
-            },
-            child: const Text('삭제'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _deleteChallenge(BuildContext context) async {
-    try {
-      final challengeRef = FirebaseDatabase.instance.ref('challenges/${widget.challengeId}');
-      await challengeRef.remove();
-
-      final participantsRef =
-      FirebaseDatabase.instance.ref('challenges/${widget.challengeId}/participants');
-      final participantSnapshot = await participantsRef.get();
-
-      if (participantSnapshot.exists) {
-        final participants = (participantSnapshot.value as Map).keys;
-        for (var userId in participants) {
-          final userChallengeRef =
-          FirebaseDatabase.instance.ref('users/$userId/currentChallenges');
-          final snapshot = await userChallengeRef.get();
-          if (snapshot.exists) {
-            List<dynamic> updatedList = [];
-            if (snapshot.value is List) {
-              updatedList = List.from(snapshot.value as List)
-                ..remove(widget.challenge['name']);
-            } else if (snapshot.value is Map) {
-              updatedList = List.from((snapshot.value as Map).values)
-                ..remove(widget.challenge['name']);
-            }
-            await userChallengeRef.set(updatedList);
-          }
-        }
-      }
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('챌린지가 삭제되었습니다.')),
-        );
-        Navigator.of(context).pop(true); // ✅ 목록 화면에 삭제 성공 전달
-      }
-    } catch (e) {
-      print('❌ 삭제 오류: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('챌린지 삭제 중 오류가 발생했습니다.')),
-      );
-    }
   }
 
   @override
@@ -210,133 +82,118 @@ class _CommunityChallengeDetailPageState extends State<CommunityChallengeDetailP
     final String name = widget.challenge['name'] ?? '';
     final String region = widget.challenge['region'] ?? '';
     final String description = widget.challenge['description'] ?? '';
-    final String creatorId = widget.challenge['creatorId'] ?? '';
+    final int targetDistance = (widget.challenge['targetDistance'] as int?) ?? 0;
+    final int required = (widget.challenge['requiredParticipants'] as int?) ?? 0;
 
-    const String relayGuide = '''
-동네 청소 릴레이는 지역 기반 팀을 꾸려 릴레이 형식으로 이어가는 챌린지입니다.
-
-참여자들은 팀을 이루어 순서대로 동네 청소에 참여하며, 목표를 달성하면 모두에게 특별 보상이 지급됩니다!
-
-- 팀원들과 함께 순번을 정해 릴레이로 진행하세요.
-- 팀의 모든 미션을 성공하면 보상을 받을 수 있습니다.
-- 우리 동네를 깨끗하게 만드는 뜻깊은 챌린지에 지금 참가해보세요!
-''';
+    final participants =
+        widget.challenge['participants'] as Map<dynamic, dynamic>? ?? {};
+    final int currentCount = participants.length;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(name.isNotEmpty ? name : '챌린지 상세'),
+        title: Text(name),
+        backgroundColor: Colors.green.shade600,
       ),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/image_firstpage_login.png',
-              fit: BoxFit.cover,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ✅ 기본 정보 카드
+            Card(
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.location_on, color: Colors.redAccent),
+                      const SizedBox(width: 6),
+                      Text(region, style: const TextStyle(fontSize: 16)),
+                    ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      const Icon(Icons.flag, color: Colors.blue),
+                      const SizedBox(width: 6),
+                      Text("목표 거리: ${(targetDistance / 1000).toStringAsFixed(0)} km"),
+                    ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      const Icon(Icons.people, color: Colors.orange),
+                      const SizedBox(width: 6),
+                      Text("모집 현황: $currentCount / $required 명"),
+                    ]),
+                  ],
+                ),
+              ),
             ),
-          ),
-          Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-                  child: Card(
-                    color: Colors.white.withOpacity(0.93),
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(22),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on, color: Colors.orange, size: 20),
-                              const SizedBox(width: 4),
-                              Text(
-                                region,
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(description, style: const TextStyle(fontSize: 16)),
-                          const SizedBox(height: 18),
-                          const Divider(thickness: 1.2),
-                          const SizedBox(height: 12),
-                          const Text(
-                            '챌린지 안내',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 7),
-                          Text(
-                            relayGuide,
-                            style: const TextStyle(fontSize: 15, color: Colors.black87, height: 1.45),
-                          ),
-                        ],
-                      ),
-                    ),
+
+            const SizedBox(height: 20),
+
+            // ✅ 설명
+            Text("📌 설명",
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text(description, style: const TextStyle(fontSize: 15)),
+
+            const SizedBox(height: 20),
+
+            // ✅ 진행 방식 안내
+            Text("📖 진행 방식",
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                ListTile(
+                  leading: Icon(Icons.group),
+                  title: Text("모집 완료 후 챌린지 시작"),
+                  subtitle: Text("모집 인원이 다 모이면 챌린지가 자동으로 시작됩니다."),
+                ),
+                ListTile(
+                  leading: Icon(Icons.run_circle),
+                  title: Text("참가자별 1km 목표"),
+                  subtitle: Text("모든 참가자에게 1km씩 플로깅 거리가 주어집니다."),
+                ),
+                ListTile(
+                  leading: Icon(Icons.star),
+                  title: Text("모두 완료하면 챌린지 성공"),
+                  subtitle: Text("참가자 전원이 목표를 달성하면 챌린지가 성공합니다."),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 30),
+
+            // ✅ 참가 버튼
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _isJoining ? null : () => _joinChallenge(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade600,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
+                child: _isJoining
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                        "이 챌린지에 참가하기",
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
               ),
-              if (creatorId == widget.userId)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () => _confirmDelete(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        '챌린지 삭제하기',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 50),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isJoining ? null : () => _checkAndJoinChallenge(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade600,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                    ),
-                    child: _isJoining
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                        : const Text('이 챌린지에 참가하기'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }

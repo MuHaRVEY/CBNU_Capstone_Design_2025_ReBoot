@@ -7,117 +7,131 @@ class CommunityMakeChallengePage extends StatefulWidget {
   final String region;
 
   const CommunityMakeChallengePage({
+    Key? key,
     required this.userId,
     required this.nickname,
     required this.region,
-    Key? key,
   }) : super(key: key);
 
   @override
-  State<CommunityMakeChallengePage> createState() => _CommunityMakeChallengePageState();
+  State<CommunityMakeChallengePage> createState() =>
+      _CommunityMakeChallengePageState();
 }
 
-class _CommunityMakeChallengePageState extends State<CommunityMakeChallengePage> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _regionController = TextEditingController();
-  final _descController = TextEditingController();
-  final _guideController = TextEditingController();
+class _CommunityMakeChallengePageState
+    extends State<CommunityMakeChallengePage> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _descController = TextEditingController();
+  final TextEditingController _targetDistanceController =
+      TextEditingController(text: "100"); // 기본 목표 거리 (km)
+  final TextEditingController _requiredController =
+      TextEditingController(text: "5"); // 기본 모집 인원
+
   bool _isLoading = false;
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _regionController.dispose();
-    _descController.dispose();
-    _guideController.dispose();
-    super.dispose();
-  }
+  Future<void> _createChallenge() async {
+    final name = _nameController.text.trim();
+    final desc = _descController.text.trim();
+    final targetKm = int.tryParse(_targetDistanceController.text) ?? 100;
+    final requiredParticipants = int.tryParse(_requiredController.text) ?? 5;
 
-  Future<void> _submitChallenge() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("챌린지 이름을 입력하세요")),
+      );
+      return;
+    }
 
-      final challenge = {
-        'name': _nameController.text,
-        'region': _regionController.text,
-        'description': _descController.text,
-        'guide': _guideController.text.trim(),
-        'createdBy': widget.nickname,
-        'createdByUserId': widget.userId,
+    setState(() => _isLoading = true);
+
+    try {
+      final newRef = FirebaseDatabase.instance.ref('challenges').push();
+
+      await newRef.set({
+        'name': name,
+        'description': desc,
+        'region': widget.region,
+
+        // ✅ 생성자 정보
+        'creatorId': widget.userId,
+        'creatorName': widget.nickname,
         'createdAt': DateTime.now().toIso8601String(),
-      };
 
-      try {
-        final ref = FirebaseDatabase.instance.ref('challenges').push();
-        await ref.set(challenge);
+        // ✅ 챌린지 목표
+        'targetDistance': targetKm * 1000, // km → m 변환
+        'requiredParticipants': requiredParticipants,
+        'started': false, // 모집 다 되기 전에는 false
 
-        setState(() => _isLoading = false);
+        // ✅ 참가자 목록 (비어있음)
+        'participants': {},
+      });
 
-        // 생성 성공시 pop
+      if (mounted) {
         Navigator.of(context).pop();
-      } catch (e) {
-        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('오류: 챌린지 생성에 실패했습니다.')),
+          const SnackBar(content: Text("챌린지가 생성되었습니다.")),
         );
       }
+    } catch (e) {
+      debugPrint("❌ 챌린지 생성 오류: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("챌린지 생성 중 오류 발생")),
+      );
     }
+
+    setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('챌린지 만들기'),
+        title: const Text("새 챌린지 만들기"),
         backgroundColor: Colors.green.shade600,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: '챌린지 이름'),
-                validator: (value) => value == null || value.isEmpty ? '챌린지 이름을 입력하세요' : null,
+        padding: const EdgeInsets.all(20),
+        child: ListView(
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: "챌린지 이름"),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _descController,
+              decoration: const InputDecoration(labelText: "챌린지 설명"),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _targetDistanceController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: "전체 목표 거리 (km)",
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _regionController,
-                decoration: const InputDecoration(labelText: '지역'),
-                validator: (value) => value == null || value.isEmpty ? '지역을 입력하세요' : null,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _requiredController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: "모집 인원 수",
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _descController,
-                decoration: const InputDecoration(labelText: '설명'),
-                maxLines: 2,
-                validator: (value) => value == null || value.isEmpty ? '설명을 입력하세요' : null,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _createChallenge,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade600,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _guideController,
-                decoration: const InputDecoration(labelText: '챌린지 안내문'), // ✅ 안내문 입력
-                maxLines: 4,
-                validator: (value) => value == null || value.isEmpty ? '안내문을 입력하세요' : null,
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton.icon(
-                onPressed: _isLoading ? null : _submitChallenge,
-                icon: _isLoading
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.add),
-                label: const Text('챌린지 생성'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade600,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  textStyle: const TextStyle(fontSize: 16),
-                ),
-              ),
-            ],
-          ),
+              child: _isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("챌린지 생성하기"),
+            ),
+          ],
         ),
       ),
     );
