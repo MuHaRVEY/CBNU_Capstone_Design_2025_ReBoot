@@ -3,6 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'dart:async'; // StreamSubscription 사용을 위해 import
 import 'dart:math'; // 거리 계산을 위해 import
+import 'google_map_service.dart'; // GoogleMapService import 추가
 
 class LivePolylineMapScreen extends StatefulWidget {
   @override
@@ -11,7 +12,6 @@ class LivePolylineMapScreen extends StatefulWidget {
 }
 
 class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
-  GoogleMapController? _mapController;
   final List<LatLng> _polylineCoordinates = [];
   Set<Polyline> _polylines = {};
   LocationData? _currentLocation;
@@ -35,8 +35,25 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   @override
   void initState() {
     super.initState();
-    // 앱 시작과 동시에 위치 추적 시작
-    _startTrackingLocation();
+    // 앱 시작과 동시에 현재 위치 가져오고 위치 추적 시작
+    _initializeLocation();
+  }
+
+  // 위치 초기화 및 추적 시작
+  void _initializeLocation() async {
+    try {
+      // 현재 위치 먼저 가져오기
+      _currentLocation = await _location.getLocation();
+      if (mounted) {
+        setState(() {});
+      }
+      // 위치 추적 시작
+      _startTrackingLocation();
+    } catch (e) {
+      print('위치 초기화 오류: $e');
+      // 오류가 발생해도 기본 위치로 추적 시작
+      _startTrackingLocation();
+    }
   }
 
   // 거리 계산 함수 (Haversine 공식)
@@ -119,7 +136,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
             _updatePolyline();
 
             // 카메라를 현재 위치로 이동 (선택 사항)
-            _mapController?.animateCamera(
+            GoogleMapService().controller?.animateCamera(
               CameraUpdate.newLatLng(newLatLng),
             );
           }
@@ -127,20 +144,24 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
       }
     });
 
-    // 앱 시작 시 초기 위치 가져오기 (선택 사항)
-    _currentLocation = await _location.getLocation();
+    // 초기 위치가 없으면 현재 위치 가져오기
+    if (_currentLocation == null) {
+      try {
+        _currentLocation = await _location.getLocation();
+      } catch (e) {
+        print('현재 위치 가져오기 실패: $e');
+      }
+    }
+    
+    // 현재 위치가 있으면 폴리라인에 추가하고 카메라 이동
     if (_currentLocation != null && _currentLocation!.latitude != null && _currentLocation!.longitude != null) {
       setState(() {
         _polylineCoordinates.add(LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!));
         _updatePolyline();
       });
-      if (_mapController != null) {
-        _mapController?.animateCamera(
-          CameraUpdate.newLatLng(
-            LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
-          ),
-        );
-      }
+      
+      // 카메라를 현재 위치로 이동
+      _moveToCurrentLocation();
     }
   }
 
@@ -372,12 +393,24 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
   // 지도 생성 시 호출
   void _onMapCreated(GoogleMapController controller) {
-    _mapController = controller;
-    // 지도가 생성된 후 초기 위치가 있으면 카메라 이동
-    if (_currentLocation != null && _currentLocation!.latitude != null && _currentLocation!.longitude != null) {
-      _mapController?.animateCamera(
-        CameraUpdate.newLatLng(
-          LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
+    GoogleMapService().setController(controller);
+    
+    // 지도가 생성된 후 현재 위치로 즉시 이동
+    _moveToCurrentLocation();
+  }
+
+  // 현재 위치로 카메라 이동
+  void _moveToCurrentLocation() {
+    if (_currentLocation != null && 
+        _currentLocation!.latitude != null && 
+        _currentLocation!.longitude != null &&
+        GoogleMapService().controller != null) {
+      GoogleMapService().controller?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
+            zoom: 18.0, // 적절한 줌 레벨
+          ),
         ),
       );
     }
@@ -393,8 +426,8 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
             initialCameraPosition: CameraPosition(
               target: _currentLocation != null && _currentLocation!.latitude != null && _currentLocation!.longitude != null
                   ? LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)
-                  : LatLng(37.5665, 126.9780), // 초기 위치 (서울 시청)
-              zoom: 15.0,
+                  : LatLng(37.5665, 126.9780), // 기본 위치 (서울 시청)
+              zoom: 18.0, // 조금 더 확대된 뷰
             ),
             polylines: _polylines,
             myLocationEnabled: true, // 내 위치 표시
@@ -532,7 +565,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
   @override
   void dispose() {
-    _mapController?.dispose();
+    GoogleMapService().controller?.dispose();
     _locationSubscription?.cancel(); // 위젯 소멸 시 스트림 구독 해제
     _stopTimer(); // 타이머 정리
     super.dispose();

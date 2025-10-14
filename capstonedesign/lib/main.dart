@@ -3,11 +3,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:provider/provider.dart';
-import 'coin_provider.dart';
+import 'Game/coin_provider.dart';
 import 'first_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'auto_login_redirect.dart';
+import 'Userinfo/auto_login_redirect.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
