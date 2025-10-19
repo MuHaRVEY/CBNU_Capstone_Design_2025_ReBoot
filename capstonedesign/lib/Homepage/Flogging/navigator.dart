@@ -49,6 +49,20 @@ class _NavigationScreenState extends State<NavigationScreen> {
   double remainingDistance = 0.0;
   int remainingTimeMin = 0;
   
+  // 저장 관련 변수들
+  bool _isSaved = false;
+  bool _isNavigationComplete = false; // 네비게이션 완료 여부
+  DateTime? _startTime;
+  Duration _elapsedTime = Duration.zero;
+  Timer? _navigationTimer;
+  
+  // 저장할 데이터들
+  static double? savedCompletedDistance;
+  static Duration? savedElapsedTime;
+  static List<LatLng>? savedRoutePoints;
+  static int? savedTotalDistanceM;
+  static int? savedTotalTimeMin;
+  
   // 성능 최적화 변수들
   DateTime? lastLocationUpdate;
   DateTime? lastRouteUpdate;
@@ -80,6 +94,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
       if (widget.totalTimeMin != null) {
         remainingTimeMin = widget.totalTimeMin!;
       }
+      
+      // 네비게이션 시작 시간 기록 및 타이머 시작
+      _startTime = DateTime.now();
+      _startNavigationTimer();
 
       // 전달받은 경로로 지도에 표시 (초기에는 전체 경로를 빨간색으로)
       setState(() {
@@ -130,6 +148,202 @@ class _NavigationScreenState extends State<NavigationScreen> {
     } catch (e) {
       print('권한 확인 중 오류 발생: $e');
       rethrow; // 상위 함수에서 처리할 수 있도록 다시 throw
+    }
+  }
+
+  // 네비게이션 타이머 시작
+  void _startNavigationTimer() {
+    _navigationTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (_startTime != null && mounted) {
+        setState(() {
+          _elapsedTime = DateTime.now().difference(_startTime!);
+        });
+      }
+    });
+  }
+
+  // 네비게이션 타이머 중지
+  void _stopNavigationTimer() {
+    _navigationTimer?.cancel();
+    _navigationTimer = null;
+  }
+
+  // 네비게이션 자동 완료 처리
+  void _onNavigationComplete() async {
+    // 위치 추적 중지
+    locationSubscription?.cancel();
+    
+    // TTS 안내
+    try {
+      await flutterTts.speak("목적지에 도착했습니다. 수고하셨습니다.");
+    } catch (e) {
+      print('TTS 오류: $e');
+    }
+    
+    // 자동으로 데이터 저장
+    _saveNavigationData();
+    
+    // 완료 다이얼로그 표시
+    if (mounted) {
+      _showCompletionDialog(isAutoComplete: true);
+    }
+  }
+
+  // 중도 종료 처리
+  void _finishNavigation() {
+    // 위치 추적 중지
+    locationSubscription?.cancel();
+    
+    // 완료 다이얼로그 표시
+    _showCompletionDialog(isAutoComplete: false);
+  }
+
+  // 데이터 저장 함수
+  void _saveNavigationData() {
+    // 완료된 거리 계산 (총 거리 - 남은 거리)
+    double completed = 0.0;
+    if (widget.totalDistanceM != null) {
+      completed = widget.totalDistanceM! - remainingDistance;
+    }
+    
+    // 모든 네비게이션 데이터 저장
+    savedCompletedDistance = completed;
+    savedElapsedTime = _elapsedTime;
+    savedRoutePoints = List.from(widget.routePoints);
+    savedTotalDistanceM = widget.totalDistanceM;
+    savedTotalTimeMin = widget.totalTimeMin;
+    
+    setState(() {
+      _isSaved = true;
+    });
+    
+    print('저장된 네비게이션 데이터:');
+    print('완료 거리: ${(completed / 1000).toStringAsFixed(2)} km');
+    print('경과 시간: ${_formatDuration(_elapsedTime)}');
+    print('전체 거리: ${widget.totalDistanceM != null ? (widget.totalDistanceM! / 1000).toStringAsFixed(2) : "N/A"} km');
+    
+    // 저장된 데이터 확인
+    printSavedNavigationData();
+  }
+
+  // 완료 다이얼로그 표시
+  void _showCompletionDialog({required bool isAutoComplete}) {
+    double completed = 0.0;
+    if (widget.totalDistanceM != null) {
+      completed = widget.totalDistanceM! - remainingDistance;
+    }
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(isAutoComplete ? '🎉 목적지 도착!' : '네비게이션 종료'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (isAutoComplete)
+                    Text(
+                      '축하합니다! 목적지에 도착했습니다.',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  SizedBox(height: 8),
+                  Text('이동 거리: ${(completed / 1000).toStringAsFixed(2)} km'),
+                  Text('소요 시간: ${_formatDuration(_elapsedTime)}'),
+                  if (widget.totalDistanceM != null)
+                    Text('전체 거리: ${(widget.totalDistanceM! / 1000).toStringAsFixed(2)} km'),
+                  if (_isSaved) ...[
+                    SizedBox(height: 16),
+                    Text(
+                      '✅ 데이터가 저장되었습니다!',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ] else ...[
+                    SizedBox(height: 16),
+                    Text(
+                      '기록을 저장하시겠습니까?',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                if (!_isSaved) ...[
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(); // 다이얼로그 닫기
+                      Navigator.of(context).pop(); // 이전 화면으로 돌아가기
+                    },
+                    child: Text('저장 안함'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      _saveNavigationData();
+                      setDialogState(() {}); // 다이얼로그 상태 업데이트
+                      
+                      // 저장 완료 스낵바 표시
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.white),
+                              SizedBox(width: 8),
+                              Text('네비게이션 기록이 저장되었습니다!'),
+                            ],
+                          ),
+                          backgroundColor: Colors.green,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    icon: Icon(Icons.save),
+                    label: Text('저장'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ] else ...[
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(); // 다이얼로그 닫기
+                      Navigator.of(context).pop(); // 이전 화면으로 돌아가기
+                    },
+                    child: Text('확인'),
+                  ),
+                ],
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // 시간 포맷팅 함수
+  String _formatDuration(Duration duration) {
+    int hours = duration.inHours;
+    int minutes = duration.inMinutes.remainder(60);
+    int seconds = duration.inSeconds.remainder(60);
+    
+    if (hours > 0) {
+      return '${hours}시간 ${minutes}분 ${seconds}초';
+    } else if (minutes > 0) {
+      return '${minutes}분 ${seconds}초';
+    } else {
+      return '${seconds}초';
     }
   }
 
@@ -218,6 +432,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
         lastRouteUpdate = now;
         // 캐시 무효화
         cachedRemainingDistance = null;
+      }
+      
+      // 목적지 도달 확인 (마지막 포인트에 근접)
+      if (nextPointIndex == widget.routePoints.length - 1 && 
+          distanceToNext < NavigationConstants.proximityThresholdM &&
+          !_isNavigationComplete) {
+        _isNavigationComplete = true;
+        _onNavigationComplete();
       }
 
       // 남은 거리 계산 최적화 - 캐싱 사용
@@ -412,7 +634,37 @@ class _NavigationScreenState extends State<NavigationScreen> {
       print('TTS 중지 중 오류: $e');
     }
     
+    // 타이머 정리
+    _stopNavigationTimer();
+    
     super.dispose();
+  }
+
+  // 저장된 데이터 접근용 getter 함수들
+  static double? getSavedCompletedDistance() => savedCompletedDistance;
+  static Duration? getSavedElapsedTime() => savedElapsedTime;
+  static List<LatLng>? getSavedRoutePoints() => savedRoutePoints;
+  static int? getSavedTotalDistanceM() => savedTotalDistanceM;
+  static int? getSavedTotalTimeMin() => savedTotalTimeMin;
+  
+  // 저장된 데이터 확인 함수
+  static void printSavedNavigationData() {
+    print('=== 저장된 네비게이션 데이터 ===');
+    print('완료 거리: ${getSavedCompletedDistance() != null ? (getSavedCompletedDistance()! / 1000).toStringAsFixed(2) : "저장되지 않음"} km');
+    print('경과 시간: ${getSavedElapsedTime()?.toString() ?? "저장되지 않음"}');
+    print('전체 거리: ${getSavedTotalDistanceM() != null ? (getSavedTotalDistanceM()! / 1000).toStringAsFixed(2) : "N/A"} km');
+    print('경로 포인트 수: ${getSavedRoutePoints()?.length ?? 0}');
+    print('================================');
+  }
+  
+  // 저장된 데이터 초기화 함수
+  static void clearSavedNavigationData() {
+    savedCompletedDistance = null;
+    savedElapsedTime = null;
+    savedRoutePoints = null;
+    savedTotalDistanceM = null;
+    savedTotalTimeMin = null;
+    print('저장된 네비게이션 데이터가 모두 초기화되었습니다.');
   }
 
   @override
@@ -441,6 +693,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
                   remainingDistance: remainingDistance,
                   remainingTimeMin: remainingTimeMin,
                   totalDistanceM: widget.totalDistanceM,
+                  elapsedTime: _elapsedTime,
+                  isSaved: _isSaved,
+                  isComplete: _isNavigationComplete,
+                  onSave: _saveNavigationData,
+                  onFinish: _finishNavigation,
                 ),
               ],
             ),
@@ -453,11 +710,21 @@ class _ProgressPanel extends StatelessWidget {
   final double remainingDistance;
   final int remainingTimeMin;
   final int? totalDistanceM;
+  final Duration elapsedTime;
+  final bool isSaved;
+  final bool isComplete;
+  final VoidCallback onSave;
+  final VoidCallback onFinish;
 
   const _ProgressPanel({
     required this.remainingDistance,
     required this.remainingTimeMin,
     this.totalDistanceM,
+    required this.elapsedTime,
+    required this.isSaved,
+    required this.isComplete,
+    required this.onSave,
+    required this.onFinish,
   });
 
   @override
@@ -482,6 +749,7 @@ class _ProgressPanel extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 첫 번째 줄: 남은 거리, 남은 시간, 진행률
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -514,10 +782,107 @@ class _ProgressPanel extends StatelessWidget {
                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
               ),
             ],
+            const SizedBox(height: 12),
+            // 두 번째 줄: 경과 시간
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.timer, color: Colors.purple, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  '경과 시간: ${_formatDuration(elapsedTime)}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.purple,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // 저장/종료 통합 버튼
+            if (!isComplete) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: isSaved ? null : onSave,
+                      icon: Icon(
+                        isSaved ? Icons.check_circle : Icons.save,
+                        size: 18,
+                      ),
+                      label: Text(isSaved ? '저장됨' : '저장'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isSaved ? Colors.green : Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: onFinish,
+                      icon: Icon(Icons.stop, size: 18),
+                      label: Text('종료'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              // 자동 완료 시에는 저장 상태만 표시
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    const SizedBox(width: 8),
+                    Text(
+                      '목적지 도착 완료!',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  String _formatDuration(Duration duration) {
+    int hours = duration.inHours;
+    int minutes = duration.inMinutes.remainder(60);
+    int seconds = duration.inSeconds.remainder(60);
+    
+    if (hours > 0) {
+      return '${hours}시간 ${minutes}분 ${seconds}초';
+    } else if (minutes > 0) {
+      return '${minutes}분 ${seconds}초';
+    } else {
+      return '${seconds}초';
+    }
   }
 
   Widget _buildInfoColumn({

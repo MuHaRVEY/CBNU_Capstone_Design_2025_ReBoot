@@ -3,7 +3,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'dart:async'; // StreamSubscription 사용을 위해 import
 import 'dart:math'; // 거리 계산을 위해 import
-import 'google_map_service.dart'; // GoogleMapService import 추가
 
 class LivePolylineMapScreen extends StatefulWidget {
   @override
@@ -12,6 +11,7 @@ class LivePolylineMapScreen extends StatefulWidget {
 }
 
 class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
+  GoogleMapController? _mapController; // 로컬 컨트롤러
   final List<LatLng> _polylineCoordinates = [];
   Set<Polyline> _polylines = {};
   LocationData? _currentLocation;
@@ -45,7 +45,9 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
       // 현재 위치 먼저 가져오기
       _currentLocation = await _location.getLocation();
       if (mounted) {
-        setState(() {});
+        setState(() {
+          // 위치를 가져온 후 상태 업데이트하여 지도 표시
+        });
       }
       // 위치 추적 시작
       _startTrackingLocation();
@@ -136,7 +138,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
             _updatePolyline();
 
             // 카메라를 현재 위치로 이동 (선택 사항)
-            GoogleMapService().controller?.animateCamera(
+            _mapController?.animateCamera(
               CameraUpdate.newLatLng(newLatLng),
             );
           }
@@ -393,7 +395,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
   // 지도 생성 시 호출
   void _onMapCreated(GoogleMapController controller) {
-    GoogleMapService().setController(controller);
+    _mapController = controller;
     
     // 지도가 생성된 후 현재 위치로 즉시 이동
     _moveToCurrentLocation();
@@ -404,8 +406,8 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     if (_currentLocation != null && 
         _currentLocation!.latitude != null && 
         _currentLocation!.longitude != null &&
-        GoogleMapService().controller != null) {
-      GoogleMapService().controller?.animateCamera(
+        _mapController != null) {
+      _mapController?.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
             target: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
@@ -419,20 +421,29 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          GoogleMap(
-            onMapCreated: _onMapCreated,
-            initialCameraPosition: CameraPosition(
-              target: _currentLocation != null && _currentLocation!.latitude != null && _currentLocation!.longitude != null
-                  ? LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)
-                  : LatLng(37.5665, 126.9780), // 기본 위치 (서울 시청)
-              zoom: 18.0, // 조금 더 확대된 뷰
-            ),
-            polylines: _polylines,
-            myLocationEnabled: true, // 내 위치 표시
-            myLocationButtonEnabled: true, // 내 위치 버튼 표시
-          ),
+      body: _currentLocation == null
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('현재 위치를 가져오는 중...'),
+                ],
+              ),
+            )
+          : Stack(
+              children: [
+                GoogleMap(
+                  onMapCreated: _onMapCreated,
+                  initialCameraPosition: CameraPosition(
+                    target: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
+                    zoom: 18.0,
+                  ),
+                  polylines: _polylines,
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: true,
+                ),
           // 상단 정보 패널
           if (_isTracking)
             Positioned(
@@ -514,22 +525,24 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          if (_isTracking) {
-            _stopTrackingLocation();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('위치 추적 일시정지됨')),
-            );
-          } else {
-            _startTrackingLocation();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('위치 추적 시작됨')),
-            );
-          }
-        },
-        child: Icon(_isTracking ? Icons.pause : Icons.play_arrow),
-      ),
+      floatingActionButton: _currentLocation != null
+          ? FloatingActionButton(
+              onPressed: () {
+                if (_isTracking) {
+                  _stopTrackingLocation();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('위치 추적 일시정지됨')),
+                  );
+                } else {
+                  _startTrackingLocation();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('위치 추적 시작됨')),
+                  );
+                }
+              },
+              child: Icon(_isTracking ? Icons.pause : Icons.play_arrow),
+            )
+          : null,
     );
   }
 
@@ -565,7 +578,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
   @override
   void dispose() {
-    GoogleMapService().controller?.dispose();
+    _mapController?.dispose();
     _locationSubscription?.cancel(); // 위젯 소멸 시 스트림 구독 해제
     _stopTimer(); // 타이머 정리
     super.dispose();
