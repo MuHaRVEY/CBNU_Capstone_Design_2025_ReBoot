@@ -7,14 +7,14 @@ class DatabaseService {
   Future<void> saveData({
     required String userId,
     required String imageUrl,
-    required String category,
+    required List<String> categories, // CHANGED: String category -> List<String> categories
   }) async {
-    // 변경된 부분: 저장 경로를 'users/유저ID/ploggingRecords'로 수정
+    // 저장 경로는 'users/유저ID/ploggingRecords'를 그대로 사용
     final ref = _database.ref("users/$userId/ploggingRecords").push();
 
     await ref.set({
       'imageUrl': imageUrl,
-      'category': category,
+      'categories': categories, // CHANGED: 'category': category -> 'categories': categories
       'timestamp': ServerValue.timestamp, // 서버의 시간 기준으로 저장
     });
   }
