@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
-import 'dart:async'; // StreamSubscription 사용을 위해 import
-import 'dart:math'; // 거리 계산을 위해 import
+import 'dart:async';
+import 'dart:math';
 
-// ★ 추가: 정지 감지 + 모험 페이지
+// 정지 감지 + 게임 페이지
 import 'package:capstonedesign/common/utils/stationary_detector.dart';
 import 'package:capstonedesign/Game/adventurepage.dart';
+// ★ 떠다니는 몬스터 오버레이
+import 'package:capstonedesign/widgets/bouncing_monster.dart';
 
 class LivePolylineMapScreen extends StatefulWidget {
   @override
@@ -22,179 +24,155 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   Location _location = Location();
   StreamSubscription<LocationData>? _locationSubscription;
 
-  // 거리 및 시간 추적 변수들
-  double _totalDistance = 0.0; // 지나간 총 거리 (미터)
-  DateTime? _startTime; // 추적 시작 시간
-  Duration _elapsedTime = Duration.zero; // 경과 시간
-  Timer? _timer; // 시간 업데이트용 타이머
-  bool _isSaved = false; // 저장 상태 추적
+  // 거리/시간/저장 (데이터 로직 유지)
+  double _totalDistance = 0.0;
+  DateTime? _startTime;
+  Duration _elapsedTime = Duration.zero;
+  Timer? _timer;
+  bool _isSaved = false;
 
-  // 종료 시 저장할 데이터들 (현재 운동 세션용)
-  static double? savedTotalDistance; // 총 거리
-  static Duration? savedElapsedTime; // 경과 시간
-  static List<LatLng>? savedPolylineCoordinates; // 폴리라인 좌표
-  static String? savedEncodedPolyline; // 인코딩된 폴리라인
+  static double? savedTotalDistance;
+  static Duration? savedElapsedTime;
+  static List<LatLng>? savedPolylineCoordinates;
+  static String? savedEncodedPolyline;
 
-  // ===== ★ 정지 감지/프롬프트 필드 =====
+  // ===== 정지 감지 =====
   final StationaryDetector _detector = StationaryDetector(
     window: Duration(seconds: 5),
-    distThreshold: 5.0,     // 드리프트 여유
+    distThreshold: 5.0,
     speedThreshold: 0.5,
   );
-  DateTime? _stationarySince; // 연속 정지 시작 시각
-  Timer? _idleTick;           // 1초 주기 체크
-  bool _showPrompt = false;   // 3초 버튼 표시 여부
-  int _promptSeconds = 0;     // 3..2..1
-  Timer? _promptTimer;
-  final int _petState = 1;    // AdventurePage에 전달할 값(실제 값으로 교체 가능)
-  // =====================================
+  DateTime? _stationarySince;
+  Timer? _idleTick;
+
+  // ===== 몬스터 표시/수명 관리 (버튼 제거, 몬스터로 대체) =====
+  bool _showMonster = false;
+  Timer? _monsterTTL; // 5초 지나면 사라짐
+  final int _petState = 1; // AdventurePage 전달값 (필요 시 프로젝트 값으로 주입)
 
   @override
   void initState() {
     super.initState();
-    // 앱 시작과 동시에 위치 추적 시작
     _startTrackingLocation();
   }
 
-  // 거리 계산 함수 (Haversine 공식)
-  double _calculateDistance(LatLng point1, LatLng point2) {
-    const double earthRadius = 6371000; // 지구 반지름 (미터)
-    double lat1Rad = point1.latitude * pi / 180;
-    double lat2Rad = point2.latitude * pi / 180;
-    double deltaLatRad = (point2.latitude - point1.latitude) * pi / 180;
-    double deltaLngRad = (point2.longitude - point1.longitude) * pi / 180;
-
-    double a = sin(deltaLatRad / 2) * sin(deltaLatRad / 2) +
-        cos(lat1Rad) * cos(lat2Rad) *
-            sin(deltaLngRad / 2) * sin(deltaLngRad / 2);
-    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    return earthRadius * c;
+  double _calculateDistance(LatLng p1, LatLng p2) {
+    const double R = 6371000;
+    final dLat = (p2.latitude - p1.latitude) * pi / 180;
+    final dLon = (p2.longitude - p1.longitude) * pi / 180;
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(p1.latitude * pi / 180) *
+            cos(p2.latitude * pi / 180) *
+            sin(dLon / 2) * sin(dLon / 2);
+    return R * (2 * atan2(sqrt(a), sqrt(1 - a)));
   }
 
-  // 시간 업데이트 타이머 시작
   void _startTimer() {
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_isTracking && _startTime != null) {
-        setState(() {
-          _elapsedTime = DateTime.now().difference(_startTime!);
-        });
+        setState(() => _elapsedTime = DateTime.now().difference(_startTime!));
       }
     });
   }
 
-  // 시간 업데이트 타이머 중지
   void _stopTimer() {
     _timer?.cancel();
     _timer = null;
   }
 
-  // ★ 정지 프롬프트 띄우기
-  void _showGamePrompt() {
-    if (!mounted) return;
-    setState(() {
-      _showPrompt = true;
-      _promptSeconds = 3;
-    });
-    _promptTimer?.cancel();
-    _promptTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) return;
-      setState(() => _promptSeconds--);
-      if (_promptSeconds <= 0) {
-        t.cancel();
-        setState(() => _showPrompt = false);
+  // ===== 정지 10초 감시 타이머 =====
+  void _startIdleCheckTimer() {
+    _idleTick?.cancel();
+    _idleTick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_stationarySince == null || _showMonster) return;
+      final idleSecs = DateTime.now().difference(_stationarySince!).inSeconds;
+      if (idleSecs >= 10) {
+        _summonMonster(); // ★ 10초 정지 → 몬스터 등장
       }
     });
   }
 
-  // ★ 정지 감시 타이머 시작
-  void _startIdleCheckTimer() {
-    _idleTick?.cancel();
-    _idleTick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_stationarySince == null || _showPrompt) return;
-      final idleSecs = DateTime.now().difference(_stationarySince!).inSeconds;
-      if (idleSecs >= 10) {
-        _showGamePrompt();
-      }
+  void _summonMonster() {
+    if (!mounted) return;
+    setState(() => _showMonster = true);
+    _monsterTTL?.cancel();
+    _monsterTTL = Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      setState(() => _showMonster = false); // ★ 5초 내 터치 없으면 사라짐
     });
+  }
+
+  void _hideMonster() {
+    if (!mounted) return;
+    _monsterTTL?.cancel();
+    setState(() => _showMonster = false);
   }
 
   // 위치 추적 시작
   void _startTrackingLocation() async {
-    // 위치 업데이트 설정 (거리 필터, 정확도 등)
     await _location.changeSettings(
-      accuracy: LocationAccuracy.high, // 높은 정확도 요구
-      distanceFilter: 0,               // ★ 0m: 정지 상태에서도 1초마다 샘플 확보
-      interval: 1000,                  // 1초마다 업데이트 시도
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 0, // 정지 중에도 1초마다 샘플 확보
+      interval: 1000,
     );
 
     _isTracking = true;
-    _startTime = DateTime.now(); // 추적 시작 시간 기록
-    _totalDistance = 0.0; // 거리 초기화
-    _elapsedTime = Duration.zero; // 시간 초기화
-    _isSaved = false; // 저장 상태 초기화
+    _startTime = DateTime.now();
+    _totalDistance = 0.0;
+    _elapsedTime = Duration.zero;
+    _isSaved = false;
 
-    // 이전 저장된 데이터 클리어
     clearSavedData();
+    _startTimer();
 
-    _startTimer(); // 타이머 시작
-
-    // ★ 정지 감시 초기화
+    // 정지 감시 초기화
     _detector.reset();
     _stationarySince = null;
     _startIdleCheckTimer();
 
-    _locationSubscription = _location.onLocationChanged.listen((LocationData currentLocation) {
-      if (_isTracking) {
-        // ====== ★ 정지 감지: 샘플 추가 & 상태 판정 ======
-        final lat = currentLocation.latitude;
-        final lon = currentLocation.longitude;
-        if (lat != null && lon != null) {
-          final nowMs = DateTime.now().millisecondsSinceEpoch;
-          final isStill = _detector.add(lat, lon, currentLocation.speed, nowMs);
-          if (isStill) {
-            _stationarySince ??= DateTime.now();
-          } else {
-            _stationarySince = null;
-            if (_showPrompt) {
-              setState(() => _showPrompt = false);
-            }
-          }
+    _locationSubscription = _location.onLocationChanged.listen((loc) {
+      if (!_isTracking) return;
+
+      // === 정지 감지 ===
+      final lat = loc.latitude;
+      final lon = loc.longitude;
+      if (lat != null && lon != null) {
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        final isStill = _detector.add(lat, lon, loc.speed, nowMs);
+        if (isStill) {
+          _stationarySince ??= DateTime.now();
+        } else {
+          _stationarySince = null;
+          if (_showMonster) _hideMonster(); // 움직이면 즉시 숨김
         }
-        // ============================================
-
-        setState(() {
-          // 이전 위치와 거리 계산
-          if (_currentLocation != null &&
-              _currentLocation!.latitude != null &&
-              _currentLocation!.longitude != null &&
-              currentLocation.latitude != null &&
-              currentLocation.longitude != null) {
-            LatLng previousLocation = LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!);
-            LatLng newLocation = LatLng(currentLocation.latitude!, currentLocation.longitude!);
-            double distance = _calculateDistance(previousLocation, newLocation);
-            _totalDistance += distance;
-          }
-
-          _currentLocation = currentLocation;
-
-          // 경로 추가 & 그리기
-          if (currentLocation.latitude != null && currentLocation.longitude != null) {
-            final newLatLng = LatLng(currentLocation.latitude!, currentLocation.longitude!);
-            _polylineCoordinates.add(newLatLng);
-            _updatePolyline();
-
-            // 카메라를 현재 위치로 이동 (선택 사항)
-            _mapController?.animateCamera(
-              CameraUpdate.newLatLng(newLatLng),
-            );
-          }
-        });
       }
+
+      // === 거리/폴리라인/UI 업데이트 (기존 로직 유지) ===
+      setState(() {
+        if (_currentLocation != null &&
+            _currentLocation!.latitude != null &&
+            _currentLocation!.longitude != null &&
+            loc.latitude != null &&
+            loc.longitude != null) {
+          final prev = LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!);
+          final cur = LatLng(loc.latitude!, loc.longitude!);
+          _totalDistance += _calculateDistance(prev, cur);
+        }
+
+        _currentLocation = loc;
+
+        if (loc.latitude != null && loc.longitude != null) {
+          final cur = LatLng(loc.latitude!, loc.longitude!);
+          _polylineCoordinates.add(cur);
+          _updatePolyline();
+          _mapController?.animateCamera(CameraUpdate.newLatLng(cur));
+        }
+      });
     });
 
-    // 앱 시작 시 초기 위치 가져오기 (선택 사항)
+    // 초기 위치 확보
     _currentLocation = await _location.getLocation();
-    if (_currentLocation != null && _currentLocation!.latitude != null && _currentLocation!.longitude != null) {
+    if (_currentLocation?.latitude != null && _currentLocation?.longitude != null) {
       setState(() {
         _polylineCoordinates.add(LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!));
         _updatePolyline();
@@ -207,39 +185,31 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     }
   }
 
-  // 위치 추적 중지
   void _stopTrackingLocation() {
-    setState(() {
-      _isTracking = false;
-    });
-    _stopTimer();              // 타이머 중지
-    _locationSubscription?.cancel(); // 스트림 구독 해제
+    setState(() => _isTracking = false);
+    _stopTimer();
+    _locationSubscription?.cancel();
 
-    // ★ 정지 감시 정리
-    _idleTick?.cancel();   _idleTick = null;
-    _promptTimer?.cancel(); _promptTimer = null;
-    _showPrompt = false;
+    _idleTick?.cancel();
+    _idleTick = null;
+
+    _monsterTTL?.cancel();
+    _showMonster = false;
   }
 
-  // 운동 종료 (저장하지 않음)
   void _finishWorkout() {
-    // 추적 중지
     _stopTrackingLocation();
-    // 완료 다이얼로그 표시 (저장 옵션 포함)
     _showCompletionDialog();
   }
 
-  // 데이터 저장 함수
   void _saveWorkoutData() {
-    String encodedPolyline = _encodePolyline(_polylineCoordinates);
+    final encoded = _encodePolyline(_polylineCoordinates);
     savedTotalDistance = _totalDistance;
     savedElapsedTime = _elapsedTime;
     savedPolylineCoordinates = List.from(_polylineCoordinates);
-    savedEncodedPolyline = encodedPolyline;
+    savedEncodedPolyline = encoded;
 
-    setState(() {
-      _isSaved = true;
-    });
+    setState(() => _isSaved = true);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -247,36 +217,33 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('운동 데이터가 저장되었습니다!'),
-              ],
-            ),
-            SizedBox(height: 4),
+            Row(children: const [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 8),
+              Text('운동 데이터가 저장되었습니다!'),
+            ]),
+            const SizedBox(height: 4),
             Text(
               '거리: ${(_totalDistance / 1000).toStringAsFixed(2)} km | 시간: ${_formatDuration(_elapsedTime)}',
-              style: TextStyle(fontSize: 12, color: Colors.white70),
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
           ],
         ),
         backgroundColor: Colors.green,
-        duration: Duration(seconds: 3),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
 
-  // 완료 다이얼로그
   void _showCompletionDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) {
+      builder: (_) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('운동 완료! 🎉'),
+              title: const Text('운동 완료! 🎉'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,16 +253,16 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                   Text('기록된 경로: ${_polylineCoordinates.length}개 포인트'),
                   if (_isSaved) ...[
                     Text('인코딩된 경로 길이: ${savedEncodedPolyline?.length ?? 0}자'),
-                    SizedBox(height: 16),
-                    Text('데이터가 저장되었습니다!',
+                    const SizedBox(height: 16),
+                    const Text('데이터가 저장되었습니다!',
                         style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                    SizedBox(height: 8),
-                    Text('인코딩된 폴리라인:',
+                    const SizedBox(height: 8),
+                    const Text('인코딩된 폴리라인:',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                     Container(
                       height: 60,
                       width: double.infinity,
-                      padding: EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey),
                         borderRadius: BorderRadius.circular(4),
@@ -303,13 +270,13 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                       child: SingleChildScrollView(
                         child: Text(
                           savedEncodedPolyline ?? '',
-                          style: TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                          style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
                         ),
                       ),
                     ),
                   ] else ...[
-                    SizedBox(height: 16),
-                    Text('운동을 저장하시겠습니까?',
+                    const SizedBox(height: 16),
+                    const Text('운동을 저장하시겠습니까?',
                         style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
                   ],
                 ],
@@ -318,18 +285,18 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                 if (!_isSaved) ...[
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pop(); // 다이얼로그 닫기
-                      Navigator.of(context).pop(); // 이전 화면으로 돌아가기
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop();
                     },
-                    child: Text('저장 안함'),
+                    child: const Text('저장 안함'),
                   ),
                   ElevatedButton.icon(
                     onPressed: () {
                       _saveWorkoutData();
-                      setDialogState(() {}); // 다이얼로그 상태 업데이트
+                      setDialogState(() {});
                     },
-                    icon: Icon(Icons.save),
-                    label: Text('저장'),
+                    icon: const Icon(Icons.save),
+                    label: const Text('저장'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
@@ -338,10 +305,10 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                 ] else ...[
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pop(); // 다이얼로그 닫기
-                      Navigator.of(context).pop(); // 이전 화면으로 돌아가기
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop();
                     },
-                    child: Text('확인'),
+                    child: const Text('확인'),
                   ),
                 ],
               ],
@@ -352,60 +319,49 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     );
   }
 
-  // 시간 포맷팅 함수
-  String _formatDuration(Duration duration) {
-    int hours = duration.inHours;
-    int minutes = duration.inMinutes.remainder(60);
-    int seconds = duration.inSeconds.remainder(60);
-    if (hours > 0) {
-      return '${hours}시간 ${minutes}분 ${seconds}초';
-    } else if (minutes > 0) {
-      return '${minutes}분 ${seconds}초';
-    } else {
-      return '${seconds}초';
-    }
+  String _formatDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    if (h > 0) return '${h}시간 ${m}분 ${s}초';
+    if (m > 0) return '${m}분 ${s}초';
+    return '${s}초';
   }
 
-  // 폴리라인을 인코딩된 문자열로 변환하는 함수 (Google Polyline Algorithm)
-  String _encodePolyline(List<LatLng> coordinates) {
-    if (coordinates.isEmpty) return '';
-    StringBuffer result = StringBuffer();
-    int prevLat = 0;
-    int prevLng = 0;
-    for (LatLng point in coordinates) {
-      int lat = (point.latitude * 1e5).round();
-      int lng = (point.longitude * 1e5).round();
-      int deltaLat = lat - prevLat;
-      int deltaLng = lng - prevLng;
-      prevLat = lat;
-      prevLng = lng;
-      result.write(_encodeSignedNumber(deltaLat));
-      result.write(_encodeSignedNumber(deltaLng));
+  String _encodePolyline(List<LatLng> coords) {
+    if (coords.isEmpty) return '';
+    final sb = StringBuffer();
+    var prevLat = 0, prevLng = 0;
+    for (final p in coords) {
+      final lat = (p.latitude * 1e5).round();
+      final lng = (p.longitude * 1e5).round();
+      sb.write(_encodeSignedNumber(lat - prevLat));
+      sb.write(_encodeSignedNumber(lng - prevLng));
+      prevLat = lat; prevLng = lng;
     }
-    return result.toString();
+    return sb.toString();
   }
 
   String _encodeSignedNumber(int num) {
-    int sgnNum = num << 1;
-    if (num < 0) sgnNum = ~sgnNum;
-    return _encodeNumber(sgnNum);
+    var sgn = num << 1;
+    if (num < 0) sgn = ~sgn;
+    return _encodeNumber(sgn);
   }
 
   String _encodeNumber(int num) {
-    StringBuffer result = StringBuffer();
+    final sb = StringBuffer();
     while (num >= 0x20) {
-      result.writeCharCode((0x20 | (num & 0x1f)) + 63);
+      sb.writeCharCode((0x20 | (num & 0x1f)) + 63);
       num >>= 5;
     }
-    result.writeCharCode(num + 63);
-    return result.toString();
+    sb.writeCharCode(num + 63);
+    return sb.toString();
   }
 
-  // 폴리라인 업데이트
   void _updatePolyline() {
     _polylines = {
       Polyline(
-        polylineId: PolylineId('path_taken'),
+        polylineId: const PolylineId('path_taken'),
         points: _polylineCoordinates,
         color: Colors.blue,
         width: 5,
@@ -413,10 +369,9 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     };
   }
 
-  // 지도 생성 시 호출
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
-    if (_currentLocation != null && _currentLocation!.latitude != null && _currentLocation!.longitude != null) {
+    if (_currentLocation?.latitude != null && _currentLocation?.longitude != null) {
       _mapController?.animateCamera(
         CameraUpdate.newLatLng(
           LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
@@ -433,9 +388,9 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
           GoogleMap(
             onMapCreated: _onMapCreated,
             initialCameraPosition: CameraPosition(
-              target: _currentLocation != null && _currentLocation!.latitude != null && _currentLocation!.longitude != null
+              target: _currentLocation?.latitude != null && _currentLocation?.longitude != null
                   ? LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)
-                  : LatLng(37.5665, 126.9780), // 초기 위치 (서울 시청)
+                  : const LatLng(37.5665, 126.9780),
               zoom: 15.0,
             ),
             polylines: _polylines,
@@ -443,14 +398,14 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
             myLocationButtonEnabled: true,
           ),
 
-          // 상단 정보 패널
+          // 상단 정보 패널 (데이터 UI 유지)
           if (_isTracking)
             Positioned(
               top: 50,
               left: 16,
               right: 16,
               child: Container(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
@@ -458,7 +413,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                     BoxShadow(
                       color: Colors.black.withOpacity(0.1),
                       blurRadius: 8,
-                      offset: Offset(0, 2),
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
@@ -489,31 +444,28 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                         ),
                       ],
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         ElevatedButton.icon(
                           onPressed: _polylineCoordinates.length > 1 && !_isSaved ? _saveWorkoutData : null,
-                          icon: Icon(
-                            _isSaved ? Icons.check_circle : Icons.save,
-                            size: 16,
-                          ),
+                          icon: Icon(_isSaved ? Icons.check_circle : Icons.save, size: 16),
                           label: Text(_isSaved ? '저장됨' : '저장'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _isSaved ? Colors.green : Colors.blue,
                             foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           ),
                         ),
                         ElevatedButton.icon(
                           onPressed: _finishWorkout,
-                          icon: Icon(Icons.stop, size: 16),
-                          label: Text('종료'),
+                          icon: const Icon(Icons.stop, size: 16),
+                          label: const Text('종료'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           ),
                         ),
                       ],
@@ -523,42 +475,24 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
               ),
             ),
 
-          // ★ 정지 10초 → 3초 카운트다운 '게임 시작' 버튼 (화면 최상단)
-          if (_showPrompt)
-            Positioned(
-              bottom: 32,
-              left: 16,
-              right: 16,
-              child: Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(16),
-                color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        '10초 동안 이동이 감지되지 않았어요',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          _stopTrackingLocation(); // 백그라운드 구독/타이머 정리
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => AdventurePage(petState: _petState),
-                            ),
-                          );
-                        },
-                        child: Text('게임 시작 (${_promptSeconds})'),
-                      ),
-                    ],
+          // ★ 떠다니는 쓰레기 몬스터 (정지 10초 후 등장, 5초 내 터치하면 게임 진입)
+          if (_showMonster)
+            BouncingMonsterOverlay(
+              asset: 'assets/images/trash_monster.png',
+              spriteSize: 96,
+              bouncePadding: const EdgeInsets.only(top: 120), // 상단 정보패널 피하기
+              onTap: () {
+                _monsterTTL?.cancel();
+                _monsterTTL = null;
+                _hideMonster();
+                _stopTrackingLocation(); // (선택) 추적/타이머 정리
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdventurePage(petState: _petState),
                   ),
-                ),
-              ),
+                );
+              },
             ),
         ],
       ),
@@ -567,12 +501,12 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
           if (_isTracking) {
             _stopTrackingLocation();
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('위치 추적 일시정지됨')),
+              const SnackBar(content: Text('위치 추적 일시정지됨')),
             );
           } else {
             _startTrackingLocation();
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('위치 추적 시작됨')),
+              const SnackBar(content: Text('위치 추적 시작됨')),
             );
           }
         },
@@ -581,7 +515,6 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     );
   }
 
-  // 정보 컬럼 위젯
   Widget _buildInfoColumn({
     required IconData icon,
     required Color iconColor,
@@ -592,21 +525,9 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, color: iconColor, size: 20),
-        SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey[600],
-          ),
-        ),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
       ],
     );
   }
@@ -614,21 +535,19 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   @override
   void dispose() {
     _mapController?.dispose();
-    _locationSubscription?.cancel(); // 위젯 소멸 시 스트림 구독 해제
-    _stopTimer(); // 타이머 정리
-    // ★ 정지 감시 정리
+    _locationSubscription?.cancel();
+    _stopTimer();
     _idleTick?.cancel();
-    _promptTimer?.cancel();
+    _monsterTTL?.cancel();
     super.dispose();
   }
 
-  // 저장된 데이터 접근용 getter 함수들
+  // 저장 데이터 getter/유틸 (유지)
   static double? getSavedDistance() => savedTotalDistance;
   static Duration? getSavedElapsedTime() => savedElapsedTime;
   static List<LatLng>? getSavedPolylineCoordinates() => savedPolylineCoordinates;
   static String? getSavedEncodedPolyline() => savedEncodedPolyline;
 
-  // 저장된 데이터 확인 함수
   static void printSavedData() {
     print('=== 저장된 운동 데이터 ===');
     print('총 거리: ${getSavedDistance() != null ? (getSavedDistance()! / 1000).toStringAsFixed(2) : "저장되지 않음"} km');
@@ -638,7 +557,6 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     print('========================');
   }
 
-  // 저장된 데이터 초기화 함수
   static void clearSavedData() {
     savedTotalDistance = null;
     savedElapsedTime = null;

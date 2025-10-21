@@ -7,6 +7,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'google_map_service.dart';
 
+// ★ 추가: 정지 감지 + 모험 페이지
+import 'package:capstonedesign/common/utils/stationary_detector.dart';
+import 'package:capstonedesign/Game/adventurepage.dart';
+
 // 성능 최적화를 위한 상수들
 class NavigationConstants {
   static const int locationUpdateIntervalMs = 1000; // 1초마다 처리
@@ -25,7 +29,7 @@ class NavigationScreen extends StatefulWidget {
   final int? totalTimeMin;
 
   const NavigationScreen({
-    super.key, 
+    super.key,
     required this.routePoints,
     this.totalDistanceM,
     this.totalTimeMin,
@@ -43,20 +47,32 @@ class _NavigationScreenState extends State<NavigationScreen> {
   StreamSubscription<LocationData>? locationSubscription;
   FlutterTts flutterTts = FlutterTts();
   bool isLoading = true;
-  
+
   // 진행 상황 추적 변수들
   double completedDistance = 0.0;
   double remainingDistance = 0.0;
   int remainingTimeMin = 0;
-  
+
   // 성능 최적화 변수들
   DateTime? lastLocationUpdate;
   DateTime? lastRouteUpdate;
   DateTime? lastTtsAnnouncement;
   double? cachedRemainingDistance;
   LatLng? lastProcessedLocation;
-  
-  // 업데이트 임계값들 (상수로 이동됨)
+  int? _lastCachedPointIndex;
+
+  // ★ 정지 감지/프롬프트
+  final StationaryDetector _detector = StationaryDetector(
+    window: Duration(seconds: 5),
+    distThreshold: 5.0,
+    speedThreshold: 0.5,
+  );
+  DateTime? _stationarySince;
+  Timer? _idleTick;         // 1초 주기 체크
+  bool _showPrompt = false; // 3초 버튼 표시 여부
+  int _promptSeconds = 0;
+  Timer? _promptTimer;
+  final int _petState = 1;  // AdventurePage에 전달 (실제 값으로 교체 가능)
 
   @override
   void initState() {
@@ -96,12 +112,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
       });
 
       startListeningLocation();
+      _startIdleChecker(); // ★ 1초 주기 정지 누적 체크 시작
     } catch (e) {
       print('네비게이션 초기화 중 오류 발생: $e');
       setState(() {
         isLoading = false;
       });
-      // 사용자에게 오류 알림
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('네비게이션 초기화에 실패했습니다: $e')),
@@ -129,47 +145,68 @@ class _NavigationScreenState extends State<NavigationScreen> {
       }
     } catch (e) {
       print('권한 확인 중 오류 발생: $e');
-      rethrow; // 상위 함수에서 처리할 수 있도록 다시 throw
+      rethrow;
     }
   }
 
   void startListeningLocation() {
     try {
       locationSubscription = location.onLocationChanged.listen(
-        (locData) async {
+            (locData) async {
           try {
             final now = DateTime.now();
-            
+
+            // ★ 먼저 정지 감지 샘플 추가 (이후에 조기 return 하더라도 감지는 계속됨)
+            final lat = locData.latitude;
+            final lon = locData.longitude;
+            if (lat != null && lon != null) {
+              final still = _detector.add(
+                  lat, lon, locData.speed, now.millisecondsSinceEpoch);
+              if (still) {
+                _stationarySince ??= now;
+              } else {
+                _stationarySince = null;
+                if (_showPrompt) {
+                  setState(() => _showPrompt = false);
+                }
+              }
+            } else {
+              return; // 좌표 없으면 이하 처리 불가
+            }
+
             // 위치 업데이트 빈도 제한
             if (lastLocationUpdate != null &&
-                now.difference(lastLocationUpdate!).inMilliseconds < NavigationConstants.locationUpdateIntervalMs) {
+                now.difference(lastLocationUpdate!).inMilliseconds <
+                    NavigationConstants.locationUpdateIntervalMs) {
               return;
             }
-            
+
             currentLocation = locData;
-            LatLng currentLatLng = LatLng(locData.latitude!, locData.longitude!);
-            
-            // 최소 이동 거리 체크
+            LatLng currentLatLng = LatLng(lat!, lon!);
+
+            // 최소 이동 거리 체크 (무거운 처리 최소화)
             if (lastProcessedLocation != null) {
-              double movementDistance = calculateDistance(lastProcessedLocation!, currentLatLng);
+              double movementDistance =
+              calculateDistance(lastProcessedLocation!, currentLatLng);
               if (movementDistance < NavigationConstants.minMovementDistanceM) {
                 return;
               }
             }
-            
+
             lastLocationUpdate = now;
             lastProcessedLocation = currentLatLng;
 
-            // 카메라 업데이트 (비동기로 처리)
+            // 카메라 업데이트 (비동기)
             GoogleMapService().controller?.animateCamera(
               CameraUpdate.newLatLng(currentLatLng),
             );
 
             await checkProximityToRoute(currentLatLng);
-            
+
             // 경로 업데이트 빈도 제한
             if (lastRouteUpdate == null ||
-                now.difference(lastRouteUpdate!).inMilliseconds >= NavigationConstants.routeUpdateIntervalMs) {
+                now.difference(lastRouteUpdate!).inMilliseconds >=
+                    NavigationConstants.routeUpdateIntervalMs) {
               updateRemainingRoute();
               lastRouteUpdate = now;
             }
@@ -191,20 +228,51 @@ class _NavigationScreenState extends State<NavigationScreen> {
     }
   }
 
+  // ★ 1초 주기로 "연속 10초 정지" 체크
+  void _startIdleChecker() {
+    _idleTick?.cancel();
+    _idleTick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_stationarySince == null || _showPrompt) return;
+      final idleSecs = DateTime.now().difference(_stationarySince!).inSeconds;
+      if (idleSecs >= 10) {
+        _showGamePrompt();
+      }
+    });
+  }
+
+  // ★ 3초 카운트다운 오버레이 표시
+  void _showGamePrompt() {
+    if (!mounted) return;
+    setState(() {
+      _showPrompt = true;
+      _promptSeconds = 3;
+    });
+    _promptTimer?.cancel();
+    _promptTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return;
+      setState(() => _promptSeconds--);
+      if (_promptSeconds <= 0) {
+        t.cancel();
+        setState(() => _showPrompt = false);
+      }
+    });
+  }
+
   Future<void> checkProximityToRoute(LatLng current) async {
     if (widget.routePoints.length < 2) return;
 
     try {
       final now = DateTime.now();
       double distanceToNext =
-          calculateDistance(current, widget.routePoints[nextPointIndex]);
+      calculateDistance(current, widget.routePoints[nextPointIndex]);
 
-      if (distanceToNext < NavigationConstants.proximityThresholdM && nextPointIndex < widget.routePoints.length - 1) {
+      if (distanceToNext < NavigationConstants.proximityThresholdM &&
+          nextPointIndex < widget.routePoints.length - 1) {
         nextPointIndex++;
-        
-        // TTS 빈도 제한
+
         if (lastTtsAnnouncement == null ||
-            now.difference(lastTtsAnnouncement!).inMilliseconds >= NavigationConstants.ttsIntervalMs) {
+            now.difference(lastTtsAnnouncement!).inMilliseconds >=
+                NavigationConstants.ttsIntervalMs) {
           try {
             await flutterTts.speak("경로를 따라 이동 중입니다");
             lastTtsAnnouncement = now;
@@ -212,26 +280,22 @@ class _NavigationScreenState extends State<NavigationScreen> {
             print('TTS 오류: $e');
           }
         }
-        
-        // 다음 포인트 도달 시에만 경로 업데이트
+
         updateRemainingRoute();
         lastRouteUpdate = now;
-        // 캐시 무효화
         cachedRemainingDistance = null;
       }
 
-      // 남은 거리 계산 최적화 - 캐싱 사용
+      // 남은 거리 계산 (캐시)
       double remainingRouteDistance = 0.0;
-      
-      if (cachedRemainingDistance == null || nextPointIndex != _lastCachedPointIndex) {
-        // 캐시가 없거나 포인트가 변경된 경우에만 재계산
+      if (cachedRemainingDistance == null ||
+          nextPointIndex != _lastCachedPointIndex) {
         if (nextPointIndex < widget.routePoints.length) {
-          // 다음 포인트부터 끝까지의 거리 (한 번만 계산하고 캐시)
-          for (int i = nextPointIndex; i < widget.routePoints.length - 1; i++) {
+          for (int i = nextPointIndex;
+          i < widget.routePoints.length - 1;
+          i++) {
             remainingRouteDistance += calculateDistance(
-              widget.routePoints[i], 
-              widget.routePoints[i + 1]
-            );
+                widget.routePoints[i], widget.routePoints[i + 1]);
           }
           cachedRemainingDistance = remainingRouteDistance;
           _lastCachedPointIndex = nextPointIndex;
@@ -239,15 +303,15 @@ class _NavigationScreenState extends State<NavigationScreen> {
       } else {
         remainingRouteDistance = cachedRemainingDistance!;
       }
-      
-      // 현재 위치에서 다음 포인트까지의 거리 추가
       if (nextPointIndex < widget.routePoints.length) {
         remainingRouteDistance += distanceToNext;
       }
 
-      // 상태 업데이트 - 변화가 있을 때만
-      final newRemainingTimeMin = (remainingRouteDistance / NavigationConstants.walkingSpeedMPerMin).ceil();
-      if ((remainingDistance - remainingRouteDistance).abs() > NavigationConstants.distanceUpdateThresholdM || // 5m 이상 차이날 때만
+      final newRemainingTimeMin =
+      (remainingRouteDistance / NavigationConstants.walkingSpeedMPerMin)
+          .ceil();
+      if ((remainingDistance - remainingRouteDistance).abs() >
+          NavigationConstants.distanceUpdateThresholdM ||
           remainingTimeMin != newRemainingTimeMin) {
         if (mounted) {
           setState(() {
@@ -257,11 +321,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
         }
       }
 
-      double distanceToRoute = getMinDistanceToPolyline(current, widget.routePoints);
+      double distanceToRoute =
+      getMinDistanceToPolyline(current, widget.routePoints);
       if (distanceToRoute > NavigationConstants.offRouteThresholdM) {
-        // TTS 빈도 제한
         if (lastTtsAnnouncement == null ||
-            now.difference(lastTtsAnnouncement!).inMilliseconds >= NavigationConstants.ttsIntervalMs) {
+            now.difference(lastTtsAnnouncement!).inMilliseconds >=
+                NavigationConstants.ttsIntervalMs) {
           try {
             await flutterTts.speak("경로를 벗어났습니다. 경로를 다시 확인하세요.");
             lastTtsAnnouncement = now;
@@ -274,38 +339,30 @@ class _NavigationScreenState extends State<NavigationScreen> {
       print('경로 근접성 확인 중 오류: $e');
     }
   }
-  
-  int? _lastCachedPointIndex;
 
   void updateRemainingRoute() {
-    // 현재 위치에서 남은 경로만 추출
     if (nextPointIndex < widget.routePoints.length) {
       List<LatLng> remainingRoutePoints = [];
       List<LatLng> completedRoutePoints = [];
-      
-      // 지나간 경로 (처음부터 현재 포인트까지)
+
       if (nextPointIndex > 0) {
         completedRoutePoints.addAll(
-          widget.routePoints.sublist(0, nextPointIndex + 1)
+            widget.routePoints.sublist(0, nextPointIndex + 1)
         );
       }
-      
-      // 현재 위치 추가 (선택사항)
+
       if (currentLocation != null) {
         remainingRoutePoints.add(
-          LatLng(currentLocation!.latitude!, currentLocation!.longitude!)
+            LatLng(currentLocation!.latitude!, currentLocation!.longitude!)
         );
       }
-      
-      // 다음 포인트부터 끝까지 추가
+
       remainingRoutePoints.addAll(
-        widget.routePoints.sublist(nextPointIndex)
+          widget.routePoints.sublist(nextPointIndex)
       );
 
-      // 폴리라인 업데이트 - 상태가 실제로 변경된 경우에만
       final newPolylines = <Polyline>{};
-      
-      // 지나간 경로 (흐린 회색으로 표시)
+
       if (completedRoutePoints.length >= 2) {
         newPolylines.add(
           Polyline(
@@ -316,8 +373,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
           ),
         );
       }
-      
-      // 남은 경로 (파란색으로 강조 표시)
+
       if (remainingRoutePoints.length >= 2) {
         newPolylines.add(
           Polyline(
@@ -329,8 +385,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         );
       }
 
-      // 실제로 변경사항이 있을 때만 setState 호출
-      if (newPolylines.length != polylines.length || 
+      if (newPolylines.length != polylines.length ||
           !_polylinesEqual(newPolylines, polylines)) {
         if (mounted) {
           setState(() {
@@ -340,8 +395,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
       }
     }
   }
-  
-  // 폴리라인 세트가 같은지 확인하는 헬퍼 메서드
+
   bool _polylinesEqual(Set<Polyline> set1, Set<Polyline> set2) {
     if (set1.length != set2.length) return false;
     for (final polyline in set1) {
@@ -400,19 +454,55 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   @override
   void dispose() {
-    try {
-      locationSubscription?.cancel();
-    } catch (e) {
-      print('위치 구독 취소 중 오류: $e');
-    }
-    
-    try {
-      flutterTts.stop();
-    } catch (e) {
-      print('TTS 중지 중 오류: $e');
-    }
-    
+    try { locationSubscription?.cancel(); } catch (_) {}
+    try { _idleTick?.cancel(); } catch (_) {}
+    try { _promptTimer?.cancel(); } catch (_) {}
+    try { flutterTts.stop(); } catch (_) {}
     super.dispose();
+  }
+
+  // ★ 3초짜리 '게임 시작' 오버레이
+  Widget _buildGamePromptOverlay() {
+    if (!_showPrompt) return const SizedBox.shrink();
+    return Positioned(
+      bottom: 32,
+      left: 16,
+      right: 16,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '10초 동안 이동이 감지되지 않았어요',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () {
+                  // 네비게이션을 잠시 멈추고 모험 페이지로
+                  try { locationSubscription?.cancel(); } catch (_) {}
+                  try { _idleTick?.cancel(); } catch (_) {}
+                  try { _promptTimer?.cancel(); } catch (_) {}
+                  try { flutterTts.stop(); } catch (_) {}
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AdventurePage(petState: _petState),
+                    ),
+                  );
+                },
+                child: Text('게임 시작 (${_promptSeconds})'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -422,28 +512,30 @@ class _NavigationScreenState extends State<NavigationScreen> {
       body: isLoading || currentLocation == null
           ? const Center(child: CircularProgressIndicator())
           : Stack(
-              children: [
-                GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: LatLng(
-                      currentLocation!.latitude!,
-                      currentLocation!.longitude!,
-                    ),
-                    zoom: 15,
-                  ),
-                  polylines: polylines,
-                  onMapCreated: (controller) => GoogleMapService().setController(controller),
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: true,
-                ),
-                // 진행 상황 표시 패널
-                _ProgressPanel(
-                  remainingDistance: remainingDistance,
-                  remainingTimeMin: remainingTimeMin,
-                  totalDistanceM: widget.totalDistanceM,
-                ),
-              ],
+        children: [
+          GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: LatLng(
+                currentLocation!.latitude!,
+                currentLocation!.longitude!,
+              ),
+              zoom: 15,
             ),
+            polylines: polylines,
+            onMapCreated: (controller) => GoogleMapService().setController(controller),
+            myLocationEnabled: true,
+            myLocationButtonEnabled: true,
+          ),
+          // 진행 상황 표시 패널
+          _ProgressPanel(
+            remainingDistance: remainingDistance,
+            remainingTimeMin: remainingTimeMin,
+            totalDistanceM: widget.totalDistanceM,
+          ),
+          // ★ 정지 10초 → 3초 카운트다운 '게임 시작' 버튼
+          _buildGamePromptOverlay(),
+        ],
+      ),
     );
   }
 }
