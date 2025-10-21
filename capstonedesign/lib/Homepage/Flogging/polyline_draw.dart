@@ -489,7 +489,9 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => AdventurePage(petState: _petState),
+                    builder: (_) => AdventurePage(petState: _petState,
+                  autoStart: true, // ★ 여기서도 자동 시작,
+                    ),
                   ),
                 );
               },
