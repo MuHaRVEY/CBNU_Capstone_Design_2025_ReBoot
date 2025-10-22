@@ -461,49 +461,49 @@ class _NavigationScreenState extends State<NavigationScreen> {
     super.dispose();
   }
 
-  // ★ 3초짜리 '게임 시작' 오버레이
-  Widget _buildGamePromptOverlay() {
-    if (!_showPrompt) return const SizedBox.shrink();
-    return Positioned(
-      bottom: 32,
-      left: 16,
-      right: 16,
-      child: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '10초 동안 이동이 감지되지 않았어요',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () {
-                  // 네비게이션을 잠시 멈추고 모험 페이지로
-                  try { locationSubscription?.cancel(); } catch (_) {}
-                  try { _idleTick?.cancel(); } catch (_) {}
-                  try { _promptTimer?.cancel(); } catch (_) {}
-                  try { flutterTts.stop(); } catch (_) {}
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AdventurePage(petState: _petState),
-                    ),
-                  );
-                },
-                child: Text('게임 시작 (${_promptSeconds})'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // // ★ 3초짜리 '게임 시작' 오버레이 - 현재 필요 없는 로직임
+  // Widget _buildGamePromptOverlay() {
+  //   if (!_showPrompt) return const SizedBox.shrink();
+  //   return Positioned(
+  //     bottom: 32,
+  //     left: 16,
+  //     right: 16,
+  //     child: Material(
+  //       elevation: 8,
+  //       borderRadius: BorderRadius.circular(16),
+  //       color: Colors.white,
+  //       child: Padding(
+  //         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+  //         child: Column(
+  //           mainAxisSize: MainAxisSize.min,
+  //           children: [
+  //             const Text(
+  //               '10초 동안 이동이 감지되지 않았어요',
+  //               style: TextStyle(fontWeight: FontWeight.bold),
+  //             ),
+  //             const SizedBox(height: 8),
+  //             ElevatedButton(
+  //               onPressed: () {
+  //                 // 네비게이션을 잠시 멈추고 모험 페이지로
+  //                 try { locationSubscription?.cancel(); } catch (_) {}
+  //                 try { _idleTick?.cancel(); } catch (_) {}
+  //                 try { _promptTimer?.cancel(); } catch (_) {}
+  //                 try { flutterTts.stop(); } catch (_) {}
+  //                 Navigator.push(
+  //                   context,
+  //                   MaterialPageRoute(
+  //                     builder: (_) => AdventurePage(petState: _petState),
+  //                   ),
+  //                 );
+  //               },
+  //               child: Text('게임 시작 (${_promptSeconds})'),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -532,8 +532,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
             remainingTimeMin: remainingTimeMin,
             totalDistanceM: widget.totalDistanceM,
           ),
-          // ★ 정지 10초 → 3초 카운트다운 '게임 시작' 버튼
-          _buildGamePromptOverlay(),
+          // // ★ 정지 10초 → 3초 카운트다운 '게임 시작' 버튼
+          // _buildGamePromptOverlay(),
         ],
       ),
     );

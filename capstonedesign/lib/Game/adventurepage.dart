@@ -2,14 +2,22 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
 
+// 보상/상태 연동
+import 'package:provider/provider.dart';
+import 'package:capstonedesign/Game/coin_provider.dart';
+// 선택: PetProvider가 있다면 아래 import 경로를 실제 프로젝트 경로로 바꿔줘
+// import 'package:capstonedesign/providers/pet_provider.dart';
+
 class AdventurePage extends StatefulWidget {
   final int petState;
-  final bool autoStart; // 플로깅에서 자동 진입 여부
+  final bool autoStart;           // 플로깅 진입이면 true
+  final VoidCallback? onPetLevelUp; // PetProvider가 없을 때 대비용 선택 콜백
 
   const AdventurePage({
     Key? key,
     required this.petState,
     this.autoStart = false,
+    this.onPetLevelUp,
   }) : super(key: key);
 
   @override
@@ -42,8 +50,9 @@ class _AdventurePageState extends State<AdventurePage> {
   int memoryCurrentIndex = 0;
   bool showMemoryChallengeUIFlag = false;
 
-  // 자동 종료(중복 Pop 방지)
+  // 종료/보상 중복 방지
   bool _ended = false;
+  bool _manualRewarded = false;
 
   @override
   void initState() {
@@ -57,6 +66,55 @@ class _AdventurePageState extends State<AdventurePage> {
       });
     }
   }
+
+  // ---------- 보상/레벨업 유틸 ----------
+  void _rewardCoins(int amount) {
+    try {
+      final cp = context.read<CoinProvider?>();
+      if (cp != null) {
+        cp.addCoins(amount);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('코인 $amount 지급!')),
+          );
+        }
+      }
+    } catch (_) {
+      // Provider가 없거나 context 이슈면 조용히 패스 (크래시 방지)
+    }
+  }
+
+  void _levelUpPetOnce() {
+    // 1) PetProvider가 있으면 사용
+    try {
+      // final pet = context.read<PetProvider?>();
+      // if (pet != null) {
+      //   pet.incrementStage(); // 실제 메서드명/로직에 맞게 수정
+      //   return;
+      // }
+    } catch (_) {}
+    // 2) 없으면 콜백 사용
+    widget.onPetLevelUp?.call();
+  }
+
+  // 플로깅 진입 결과 처리(성공/실패). 성공만 보상.
+  void _onAutoStartResult({required bool success}) {
+    if (success) {
+      _rewardCoins(10);
+      _levelUpPetOnce();
+    }
+    _completeAndExitIfAuto();
+  }
+
+  // 일반 진입에서 보스(몬스터) 격파 시 보상 (한 번만)
+  void _onManualClear() {
+    if (_manualRewarded) return;
+    _manualRewarded = true;
+    _rewardCoins(30);
+    _levelUpPetOnce();
+  }
+
+  // -------------------------------------
 
   // 랜덤 미니게임 바로 시작
   void _startRandomChallenge() {
@@ -239,11 +297,16 @@ class _AdventurePageState extends State<AdventurePage> {
                   // 성공
                   monsterHp = (monsterHp - 1).clamp(0, 3);
                   showMonsterAttackedEffect();
-                  if (monsterHp <= 0) {
-                    hasMonster = false;
-                    inBattle = false;
+
+                  if (widget.autoStart) {
+                    _onAutoStartResult(success: true);
+                  } else {
+                    if (monsterHp <= 0) {
+                      hasMonster = false;
+                      inBattle = false;
+                      _onManualClear(); // 완전 처치 보상
+                    }
                   }
-                  _completeAndExitIfAuto(); // ★ 자동 진입 시 즉시 종료
                 }
               });
             },
@@ -302,22 +365,34 @@ class _AdventurePageState extends State<AdventurePage> {
   }
 
   void resolveTapChallenge(int tapCount) {
-    setState(() {
-      if (tapCount >= 15) {
-        // 성공
+    if (widget.autoStart) {
+      // 플로깅 진입: 성공 시 10코인 + 레벨업, 실패 시 보상 없음 → 즉시 종료
+      final success = tapCount >= 15;
+      if (success) {
         monsterHp = (monsterHp - 1).clamp(0, 3);
         showMonsterAttackedEffect();
-        _completeAndExitIfAuto(); // ★ 즉시 종료
       } else {
-        // 실패
         playerHp = (playerHp - 1).clamp(0, 3);
-        _completeAndExitIfAuto(); // ★ 즉시 종료
+      }
+      _onAutoStartResult(success: success);
+      return;
+    }
+
+    // 일반 진입
+    setState(() {
+      if (tapCount >= 15) {
+        monsterHp = (monsterHp - 1).clamp(0, 3);
+        showMonsterAttackedEffect();
+      } else {
+        playerHp = (playerHp - 1).clamp(0, 3);
       }
 
-      // 수동 모드 대비 기본 마무리
       if (monsterHp <= 0 || playerHp <= 0) {
         inBattle = false;
         hasMonster = false;
+        if (monsterHp <= 0) {
+          _onManualClear(); // 완전 처치 보상
+        }
       }
     });
   }
@@ -468,15 +543,24 @@ class _AdventurePageState extends State<AdventurePage> {
               onWillAccept: (data) => true,
               onAccept: (data) {
                 if (data == memorySequence[memoryCurrentIndex]) {
+                  // 성공
                   setState(() {
                     memoryOptions.remove(data);
                     memoryCurrentIndex++;
                     if (memoryCurrentIndex >= memorySequence.length) {
-                      // 성공
                       monsterHp = (monsterHp - 1).clamp(0, 3);
                       showMemoryChallengeUIFlag = false;
                       showMonsterAttackedEffect();
-                      _completeAndExitIfAuto(); // ★ 즉시 종료
+
+                      if (widget.autoStart) {
+                        _onAutoStartResult(success: true);
+                      } else {
+                        if (monsterHp <= 0) {
+                          hasMonster = false;
+                          inBattle = false;
+                          _onManualClear();
+                        }
+                      }
                     }
                   });
                 } else {
@@ -485,14 +569,14 @@ class _AdventurePageState extends State<AdventurePage> {
                     playerHp = (playerHp - 1).clamp(0, 3);
                     showMemoryChallengeUIFlag = false;
                   });
-                  _completeAndExitIfAuto();   // ★ 즉시 종료
-                }
-
-                if (monsterHp <= 0 || playerHp <= 0) {
-                  setState(() {
-                    hasMonster = false;
-                    inBattle = false;
-                  });
+                  if (widget.autoStart) {
+                    _onAutoStartResult(success: false);
+                  } else {
+                    if (playerHp <= 0) {
+                      hasMonster = false;
+                      inBattle = false;
+                    }
+                  }
                 }
               },
               builder: (context, candidateData, rejectedData) {
@@ -544,7 +628,7 @@ class _AdventurePageState extends State<AdventurePage> {
           ? (widget.autoStart || inBattle)  // 자동 시작이면 바로 전투 화면
           ? buildBattleView()
           : buildMonsterEncounter()
-          : const Center(child: Text('주변의 모든 몬스터를 물리쳤습니다!')),
+          : const Center(child: Text('주변에 몬스터가 없습니다.')),
     );
   }
 }
