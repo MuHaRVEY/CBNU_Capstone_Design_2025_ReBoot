@@ -7,8 +7,13 @@ import 'dart:math';
 // 정지 감지 + 게임 페이지
 import 'package:capstonedesign/common/utils/stationary_detector.dart';
 import 'package:capstonedesign/Game/adventurepage.dart';
-// ★ 떠다니는 몬스터 오버레이
+
+// 떠다니는 몬스터 오버레이
 import 'package:capstonedesign/widgets/bouncing_monster.dart';
+
+// ★ Provider (플로깅 성공 시 상태 업)
+import 'package:provider/provider.dart';
+import 'package:capstonedesign/Game/pet_provider.dart';
 
 class LivePolylineMapScreen extends StatefulWidget {
   @override
@@ -21,7 +26,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   Set<Polyline> _polylines = {};
   LocationData? _currentLocation;
   bool _isTracking = false;
-  Location _location = Location();
+  final Location _location = Location();
   StreamSubscription<LocationData>? _locationSubscription;
 
   // 거리/시간/저장 (데이터 로직 유지)
@@ -38,17 +43,16 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
   // ===== 정지 감지 =====
   final StationaryDetector _detector = StationaryDetector(
-    window: Duration(seconds: 5),
+    window: const Duration(seconds: 5),
     distThreshold: 5.0,
     speedThreshold: 0.5,
   );
   DateTime? _stationarySince;
   Timer? _idleTick;
 
-  // ===== 몬스터 표시/수명 관리 (버튼 제거, 몬스터로 대체) =====
+  // ===== 몬스터 표시/수명 관리 =====
   bool _showMonster = false;
   Timer? _monsterTTL; // 5초 지나면 사라짐
-  final int _petState = 1; // AdventurePage 전달값 (필요 시 프로젝트 값으로 주입)
 
   @override
   void initState() {
@@ -109,7 +113,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   }
 
   // 위치 추적 시작
-  void _startTrackingLocation() async {
+  Future<void> _startTrackingLocation() async {
     await _location.changeSettings(
       accuracy: LocationAccuracy.high,
       distanceFilter: 0, // 정지 중에도 1초마다 샘플 확보
@@ -147,11 +151,10 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
         }
       }
 
-      // === 거리/폴리라인/UI 업데이트 (기존 로직 유지) ===
+      // === 거리/폴리라인/UI 업데이트 ===
       setState(() {
-        if (_currentLocation != null &&
-            _currentLocation!.latitude != null &&
-            _currentLocation!.longitude != null &&
+        if (_currentLocation?.latitude != null &&
+            _currentLocation?.longitude != null &&
             loc.latitude != null &&
             loc.longitude != null) {
           final prev = LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!);
@@ -335,9 +338,11 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     for (final p in coords) {
       final lat = (p.latitude * 1e5).round();
       final lng = (p.longitude * 1e5).round();
-      sb.write(_encodeSignedNumber(lat - prevLat));
-      sb.write(_encodeSignedNumber(lng - prevLng));
-      prevLat = lat; prevLng = lng;
+      sb
+        ..write(_encodeSignedNumber(lat - prevLat))
+        ..write(_encodeSignedNumber(lng - prevLng));
+      prevLat = lat;
+      prevLng = lng;
     }
     return sb.toString();
   }
@@ -481,19 +486,42 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
               asset: 'assets/images/trash_monster.png',
               spriteSize: 96,
               bouncePadding: const EdgeInsets.only(top: 120), // 상단 정보패널 피하기
-              onTap: () {
+              onTap: () async {
                 _monsterTTL?.cancel();
                 _monsterTTL = null;
                 _hideMonster();
-                _stopTrackingLocation(); // (선택) 추적/타이머 정리
-                Navigator.push(
+
+                // (선택) 추적 정지
+                _stopTrackingLocation();
+
+                // 현재 펫 상태를 Provider에서 읽어 넘김
+                final pet = context.read<PetProvider>();
+                final result = await Navigator.push<Map<String, dynamic>?>(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => AdventurePage(petState: _petState,
-                  autoStart: true, // ★ 여기서도 자동 시작,
+                    builder: (_) => AdventurePage(
+                      petState: pet.petState,
+                      autoStart: true, // ★ 플로깅 진입: 자동 시작
                     ),
                   ),
                 );
+
+                // 결과에 따라 상태 업 (코인 지급은 AdventurePage에서 처리됨)
+                final win = result?['win'] as bool? ?? false;
+                final entry = result?['entry'] as String?;
+                if (entry == 'plogging' && win) {
+                  await pet.levelUpOnce(); // 12시간 타이머 포함 DB 저장
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('플로깅 클리어! 강아지 상태가 1단계 상승했어요.')),
+                    );
+                  }
+                }
+
+                // (선택) 추적 재개
+                if (mounted && !_isTracking) {
+                  _startTrackingLocation();
+                }
               },
             ),
         ],
