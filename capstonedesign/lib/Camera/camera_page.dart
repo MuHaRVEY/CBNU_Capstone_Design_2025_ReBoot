@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'camera_service.dart';
-import 'trash_camera_page.dart'; // 촬영 후 이동할 페이지
+import 'trash_camera_page.dart';
 
 class CameraPage extends StatefulWidget {
   final String userId;
@@ -13,16 +13,13 @@ class CameraPage extends StatefulWidget {
 }
 
 class _CameraPageState extends State<CameraPage> {
-  // CameraService는 상태를 가지지 않으므로 final로 선언
   final CameraService _cameraService = CameraService();
-
-  // CameraController는 이 위젯의 생명주기를 따릅니다.
   CameraController? _controller;
-
-  // 초기화 과정을 Future로 관리하여 build 메서드에서 활용
   late final Future<void> _initCameraFuture;
+  bool _isTakingPicture = false;
 
-  bool _isTakingPicture = false; // 중복 촬영 방지 플래그
+  // ✅ 플래시 상태 관리
+  bool _isFlashOn = false;
 
   @override
   void initState() {
@@ -33,49 +30,34 @@ class _CameraPageState extends State<CameraPage> {
   /// ✅ 카메라 초기화
   Future<void> _initCamera() async {
     try {
-      debugPrint("🔄 Initializing camera...");
       final controller = await _cameraService.initCamera();
-
-      if (controller == null) {
-        throw Exception("카메라 컨트롤러를 받아오지 못했습니다.");
-      }
-
-      // 위젯이 아직 마운트 상태일 때만 컨트롤러를 설정
       if (!mounted) return;
-      setState(() {
-        _controller = controller;
-      });
-
-      debugPrint("✅ Camera initialized successfully");
-    } catch (e, stack) {
-      debugPrint("🚨 Camera init failed: $e");
-      debugPrint("$stack");
-
+      setState(() => _controller = controller);
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("카메라 초기화 실패: ${e.toString()}")),
+          SnackBar(content: Text("카메라 초기화 실패: $e")),
         );
       }
     }
   }
 
-  /// ✅ 사진 촬영 및 확인 페이지로 이동
-  Future<void> _takePicture() async {
-    // 컨트롤러가 준비되지 않았거나, 이미 촬영 중이면 아무것도 하지 않음
-    if (_controller == null || !_controller!.value.isInitialized || _isTakingPicture) {
-      return;
-    }
+  /// ✅ 플래시 토글
+  Future<void> _toggleFlash() async {
+    if (_controller == null) return;
+    final newMode = _isFlashOn ? FlashMode.off : FlashMode.torch;
+    await _controller!.setFlashMode(newMode);
+    setState(() => _isFlashOn = !_isFlashOn);
+  }
 
+  /// ✅ 사진 촬영
+  Future<void> _takePicture() async {
+    if (_controller == null || !_controller!.value.isInitialized || _isTakingPicture) return;
     setState(() => _isTakingPicture = true);
 
     try {
-      debugPrint("📸 Taking a picture...");
       final XFile picture = await _controller!.takePicture();
-      debugPrint("✅ Picture taken: ${picture.path}");
-
       if (!mounted) return;
-
-      // 촬영된 이미지 경로를 가지고 TrashCameraPage로 이동
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -85,16 +67,7 @@ class _CameraPageState extends State<CameraPage> {
           ),
         ),
       );
-    } catch (e, stack) {
-      debugPrint("🚨 Picture capture failed: $e");
-      debugPrint("$stack");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("사진 촬영 실패: ${e.toString()}")),
-        );
-      }
     } finally {
-      // 페이지 전환 후 돌아왔을 때 다시 촬영 가능하도록 플래그 해제
       if (mounted) setState(() => _isTakingPicture = false);
     }
   }
@@ -104,33 +77,111 @@ class _CameraPageState extends State<CameraPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        // FutureBuilder를 사용해 카메라 초기화 과정을 명확하게 처리
         child: FutureBuilder<void>(
           future: _initCameraFuture,
           builder: (context, snapshot) {
-            // 초기화가 완료되고 컨트롤러가 준비되었을 때
             if (snapshot.connectionState == ConnectionState.done && _controller != null) {
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  CameraPreview(_controller!),
-                  // 촬영 버튼
-                  Positioned(
-                    bottom: 40,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: IconButton(
-                        icon: const Icon(Icons.camera_alt, size: 70, color: Colors.white),
-                        // 촬영 중일 때는 버튼 비활성화
-                        onPressed: _isTakingPicture ? null : _takePicture,
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final previewHeight = constraints.maxHeight * 0.65; // ✅ overflow 방지
+                  return Column(
+                    children: [
+                      /// ✅ 상단 바 (닫기 + 사진 + 플래시)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.close_rounded,
+                                  color: Colors.white, size: 28),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                            const Text("사진",
+                                style: TextStyle(color: Colors.white, fontSize: 16)),
+                            IconButton(
+                              icon: Icon(
+                                _isFlashOn ? Icons.flash_on : Icons.flash_off,
+                                color: Colors.white,
+                                size: 26,
+                              ),
+                              onPressed: _toggleFlash,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
-                ],
+
+                      /// ✅ 카메라 미리보기 (아이폰 스타일 비율 + 둥근 모서리)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          height: previewHeight,
+                          margin: const EdgeInsets.symmetric(horizontal: 12),
+                          child: AspectRatio(
+                            aspectRatio: 3 / 4,
+                            child: CameraPreview(_controller!),
+                          ),
+                        ),
+                      ),
+
+                      /// ✅ 하단 영역 (안내문 + 촬영 버튼 + 모드 선택)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12, bottom: 20),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              Text(
+                                "중앙에 피사체를 맞춰주세요",
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.8),
+                                  fontSize: 14,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: _isTakingPicture ? null : _takePicture,
+                                child: Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 4),
+                                  ),
+                                  child: Center(
+                                    child: Container(
+                                      width: 60,
+                                      height: 60,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.9),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  Text("사진",
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold)),
+                                  SizedBox(width: 20),
+
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               );
             }
-            // 초기화 중일 때 로딩 인디케이터 표시
+
+            /// ✅ 로딩 중
             return const Center(
               child: CircularProgressIndicator(color: Colors.white),
             );
@@ -142,10 +193,9 @@ class _CameraPageState extends State<CameraPage> {
 
   @override
   void dispose() {
-    debugPrint("🧹 Disposing camera controller...");
-    // CameraPage가 소유한 컨트롤러를 여기서만 해제
     _controller?.dispose();
-    debugPrint("✅ Camera controller disposed.");
     super.dispose();
   }
 }
+
+
