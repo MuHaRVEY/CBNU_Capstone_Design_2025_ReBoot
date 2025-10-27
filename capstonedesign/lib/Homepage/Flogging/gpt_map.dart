@@ -11,7 +11,8 @@ import 'dart:ui';
 import 'google_map_service.dart';
 
 class PolylineMapScreen extends StatefulWidget {
-  const PolylineMapScreen({super.key});
+  final String userId; //userId 추가
+  const PolylineMapScreen({super.key, required this.userId}); //userId 추가
 
   @override
   _PolylineMapScreenState createState() => _PolylineMapScreenState();
@@ -210,7 +211,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => 
-                                LivePolylineMapScreen()
+                                LivePolylineMapScreen(userId: widget.userId)//수정: userId 전달
                                 )
                             );
                           },
