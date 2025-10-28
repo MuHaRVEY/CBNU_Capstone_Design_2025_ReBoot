@@ -15,6 +15,7 @@ class FirebaseWorkoutService {
     bool isNavigation = false,
     String? encodedRoute, // 👈 옵셔널 경로
     int? pointCount,     // 👈 옵셔널 좌표 개수
+    String? nameRoute,   // 👈 옵셔널 경로 이름
   }) async {
     try {
       final uid = _auth.currentUser?.uid;
@@ -84,6 +85,7 @@ class FirebaseWorkoutService {
       // ✅ 경로 데이터가 있으면 (체크했으면) 맵에 추가
       if (savedRoute) {
         sessionData['encodedRoute'] = encodedRoute;
+        sessionData['nameRoute'] = nameRoute ?? 'Unnamed Route';
         sessionData['pointCount'] = pointCount;
       }
 

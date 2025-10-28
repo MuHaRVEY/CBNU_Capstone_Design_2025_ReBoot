@@ -37,8 +37,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   static Duration? savedElapsedTime; // 경과 시간
   static List<LatLng>? savedPolylineCoordinates; // 폴리라인 좌표
   static String? savedEncodedPolyline; // 인코딩된 폴리라인
-
-  @override
+  final TextEditingController savedRouteNameController = TextEditingController(text: '나의 경로'); // 경로 이름 입력 컨트롤러
   void initState() {
     super.initState();
     // 앱 시작과 동시에 현재 위치 가져오고 위치 추적 시작
@@ -256,6 +255,14 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    if (saveRoute && !_isSaved)
+                      TextField(
+                        controller: savedRouteNameController,
+                        decoration: InputDecoration(
+                          labelText: '경로 이름',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
                 ],
               ),
               actions: [
@@ -290,6 +297,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                         isNavigation: false,
                         encodedRoute: routeToSave,
                         pointCount: pointsToSave,
+                        nameRoute: savedRouteNameController.text,
                       );
 
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -304,9 +312,9 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                       );
 
                       // ✅ 저장 후 다이얼로그 닫고 CameraPage로 이동
-                      if (mounted) {
+                      /* if (mounted) {
                         Navigator.of(context).pop();
-                      }
+                      } */
                     },
                     icon: const Icon(Icons.save),
                     label: const Text('저장'),
