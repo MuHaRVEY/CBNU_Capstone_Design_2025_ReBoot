@@ -3,8 +3,13 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'dart:async'; // StreamSubscription 사용을 위해 import
 import 'dart:math'; // 거리 계산을 위해 import
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../Firebase/firebase_workout_service.dart';
 
 class LivePolylineMapScreen extends StatefulWidget {
+  final String userId;
+  const LivePolylineMapScreen({super.key, required this.userId});
   @override
   _LivePolylineMapScreen createState() =>
       _LivePolylineMapScreen();
@@ -18,14 +23,14 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   bool _isTracking = false;
   Location _location = Location();
   StreamSubscription<LocationData>? _locationSubscription;
-  
+
   // 거리 및 시간 추적 변수들
   double _totalDistance = 0.0; // 지나간 총 거리 (미터)
   DateTime? _startTime; // 추적 시작 시간
   Duration _elapsedTime = Duration.zero; // 경과 시간
   Timer? _timer; // 시간 업데이트용 타이머
   bool _isSaved = false; // 저장 상태 추적
-  
+
   // 종료 시 저장할 데이터들 (현재 운동 세션용)
   static double? savedTotalDistance; // 총 거리
   static Duration? savedElapsedTime; // 경과 시간
@@ -39,11 +44,17 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     _initializeLocation();
   }
 
+  Future<String?> _getCurrentUid() async {
+    final user = FirebaseAuth.instance.currentUser;
+    return user?.uid;
+  }
+
   // 위치 초기화 및 추적 시작
   void _initializeLocation() async {
     try {
       // 현재 위치 먼저 가져오기
       _currentLocation = await _location.getLocation();
+      print('초기 위치 획득: ${_currentLocation?.latitude}, ${_currentLocation?.longitude} ');
       if (mounted) {
         setState(() {
           // 위치를 가져온 후 상태 업데이트하여 지도 표시
@@ -61,7 +72,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   // 거리 계산 함수 (Haversine 공식)
   double _calculateDistance(LatLng point1, LatLng point2) {
     const double earthRadius = 6371000; // 지구 반지름 (미터)
-    
+
     double lat1Rad = point1.latitude * pi / 180;
     double lat2Rad = point2.latitude * pi / 180;
     double deltaLatRad = (point2.latitude - point1.latitude) * pi / 180;
@@ -106,31 +117,37 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     _totalDistance = 0.0; // 거리 초기화
     _elapsedTime = Duration.zero; // 시간 초기화
     _isSaved = false; // 저장 상태 초기화
-    
+
     // 이전 저장된 데이터 클리어
     clearSavedData();
-    
+
     _startTimer(); // 타이머 시작
-    
+
     _locationSubscription = _location.onLocationChanged.listen((LocationData currentLocation) {
       if (_isTracking) {
+        print(' 위치 업데이트 수신: ${currentLocation.latitude}, ${currentLocation.longitude}');
         setState(() {
-          
+
           // 이전 위치와 거리 계산
-          if (_currentLocation != null && 
-              _currentLocation!.latitude != null && 
+          if (_currentLocation != null &&
+              _currentLocation!.latitude != null &&
               _currentLocation!.longitude != null &&
-              currentLocation.latitude != null && 
+              currentLocation.latitude != null &&
               currentLocation.longitude != null) {
-            
+
             LatLng previousLocation = LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!);
             LatLng newLocation = LatLng(currentLocation.latitude!, currentLocation.longitude!);
-            
+
             // 거리 추가
             double distance = _calculateDistance(previousLocation, newLocation);
             _totalDistance += distance;
+            print('✅ 거리 계산 완료: +${distance.toStringAsFixed(2)}m (총: ${_totalDistance.toStringAsFixed(2)}m)');
+          } else {
+            print('⚠️ 위치 데이터 누락: 이전=${_currentLocation?.latitude}, 현재=${currentLocation.latitude}');
+
           }
-          
+
+
           _currentLocation = currentLocation;
           if (currentLocation.latitude != null && currentLocation.longitude != null) {
             final newLatLng = LatLng(currentLocation.latitude!, currentLocation.longitude!);
@@ -154,14 +171,14 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
         print('현재 위치 가져오기 실패: $e');
       }
     }
-    
+
     // 현재 위치가 있으면 폴리라인에 추가하고 카메라 이동
     if (_currentLocation != null && _currentLocation!.latitude != null && _currentLocation!.longitude != null) {
       setState(() {
         _polylineCoordinates.add(LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!));
         _updatePolyline();
       });
-      
+
       // 카메라를 현재 위치로 이동
       _moveToCurrentLocation();
     }
@@ -180,64 +197,18 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   void _finishWorkout() {
     // 추적 중지
     _stopTrackingLocation();
-    
+
     // 완료 다이얼로그 표시 (저장 옵션 포함)
     _showCompletionDialog();
   }
 
   // 데이터 저장 함수
-  void _saveWorkoutData() {
-    // 인코딩된 폴리라인 생성
-    String encodedPolyline = _encodePolyline(_polylineCoordinates);
-    
-    // 모든 운동 데이터 저장
-    savedTotalDistance = _totalDistance; // 총 거리 저장
-    savedElapsedTime = _elapsedTime; // 경과 시간 저장
-    savedPolylineCoordinates = List.from(_polylineCoordinates); // 폴리라인 좌표 저장
-    savedEncodedPolyline = encodedPolyline; // 인코딩된 폴리라인 저장
-    
-    print('저장된 데이터:');
-    print('거리: ${(_totalDistance / 1000).toStringAsFixed(2)} km');
-    print('시간: ${_formatDuration(_elapsedTime)}');
-    print('폴리라인 포인트 수: ${_polylineCoordinates.length}');
-    print('인코딩된 폴리라인 길이: ${encodedPolyline.length} 문자');
-    
-    setState(() {
-      _isSaved = true;
-    });
-    
-    // 저장된 데이터 확인 (테스트용)
-    printSavedData();
-    
-    // 저장 완료 스낵바 표시
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('운동 데이터가 저장되었습니다!'),
-              ],
-            ),
-            SizedBox(height: 4),
-            Text(
-              '거리: ${(_totalDistance / 1000).toStringAsFixed(2)} km | 시간: ${_formatDuration(_elapsedTime)}',
-              style: TextStyle(fontSize: 12, color: Colors.white70),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 3),
-      ),
-    );
-  }
+
 
   // 완료 다이얼로그
   void _showCompletionDialog() {
+    bool saveRoute = false; // ✅ 경로 저장 여부 추가
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -245,7 +216,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('운동 완료! 🎉'),
+              title: const Text('운동 완료! 🎉'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,52 +224,98 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                   Text('총 이동 거리: ${(_totalDistance / 1000).toStringAsFixed(2)} km'),
                   Text('총 소요 시간: ${_formatDuration(_elapsedTime)}'),
                   Text('기록된 경로: ${_polylineCoordinates.length}개 포인트'),
-                  if (_isSaved) ...[
-                    Text('인코딩된 경로 길이: ${savedEncodedPolyline?.length ?? 0}자'),
-                    SizedBox(height: 16),
-                    Text('데이터가 저장되었습니다!', 
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                    SizedBox(height: 8),
-                    Text('인코딩된 폴리라인:', 
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    Container(
-                      height: 60,
-                      width: double.infinity,
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          savedEncodedPolyline ?? '',
-                          style: TextStyle(fontSize: 10, fontFamily: 'monospace'),
-                        ),
+                  const SizedBox(height: 16),
+
+                  // ✅ 기존 문구 유지
+                  if (!_isSaved)
+                    Text(
+                      '운동을 저장하시겠습니까?',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
                       ),
                     ),
-                  ] else ...[
-                    SizedBox(height: 16),
-                    Text('운동을 저장하시겠습니까?', 
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
-                  ],
+
+                  // ✅ 새로 추가된 경로 저장 선택
+                  if (!_isSaved)
+                    CheckboxListTile(
+                      title: const Text('이 경로(Polyline)도 저장하기'),
+                      value: saveRoute,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          saveRoute = value ?? false;
+                        });
+                      },
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+
+
+                  if (_isSaved)
+                    const Text(
+                      '데이터가 저장되었습니다!',
+                      style:
+                      TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
                 ],
               ),
               actions: [
                 if (!_isSaved) ...[
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pop(); // 다이얼로그 닫기
-                      Navigator.of(context).pop(); // 이전 화면으로 돌아가기
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop();
                     },
-                    child: Text('저장 안함'),
+                    child: const Text('저장 안함'),
                   ),
                   ElevatedButton.icon(
-                    onPressed: () {
-                      _saveWorkoutData();
-                      setDialogState(() {}); // 다이얼로그 상태 업데이트
+                    onPressed: () async {
+                      // 1. 인코딩된 폴리라인 계산 (삭제된 _saveWorkoutData의 핵심 기능)
+                      String encodedPolyline = _encodePolyline(_polylineCoordinates);
+
+                      // 2. UI 상태 변경
+                      setState(() => _isSaved = true);
+                      setDialogState(() {
+                        _isSaved = true;
+                      });
+
+                      // 3. 로직 분기 (하나의 함수 호출)
+                      String? routeToSave;
+                      int? pointsToSave;
+
+                      // ⭐️ `saveRoute` 체크박스 변수를 사용
+                      if (saveRoute) {
+                        // 3a. 경로 저장 O (체크함)
+                        routeToSave = encodedPolyline;
+                        pointsToSave = _polylineCoordinates.length;
+                      }
+
+                      // 3b. 'saveWorkout' 함수 하나만 호출
+                      // ✅ 'saveRouteData' 대신 'saveWorkout'을 호출
+                      await FirebaseWorkoutService.saveWorkout(
+                        distanceM: _totalDistance,
+                        duration: _elapsedTime,
+                        isNavigation: false,
+                        encodedRoute: routeToSave,  // 👈 체크 안 했으면 null
+                        pointCount: pointsToSave, // 👈 체크 안 했으면 null
+                      );
+                      // 4. 스낵바 표시
+                      if (saveRoute) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('운동 및 경로 데이터 저장 완료 ✅')),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '운동 데이터가 저장되었습니다! (${(_totalDistance / 1000).toStringAsFixed(2)} km)',
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
                     },
-                    icon: Icon(Icons.save),
-                    label: Text('저장'),
+                    icon: const Icon(Icons.save),
+                    label: const Text('저장'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
@@ -307,10 +324,10 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                 ] else ...[
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pop(); // 다이얼로그 닫기
-                      Navigator.of(context).pop(); // 이전 화면으로 돌아가기
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop();
                     },
-                    child: Text('확인'),
+                    child: const Text('확인'),
                   ),
                 ],
               ],
@@ -326,7 +343,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     int hours = duration.inHours;
     int minutes = duration.inMinutes.remainder(60);
     int seconds = duration.inSeconds.remainder(60);
-    
+
     if (hours > 0) {
       return '${hours}시간 ${minutes}분 ${seconds}초';
     } else if (minutes > 0) {
@@ -339,28 +356,28 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   // 폴리라인을 인코딩된 문자열로 변환하는 함수 (Google Polyline Algorithm)
   String _encodePolyline(List<LatLng> coordinates) {
     if (coordinates.isEmpty) return '';
-    
+
     StringBuffer result = StringBuffer();
     int prevLat = 0;
     int prevLng = 0;
-    
+
     for (LatLng point in coordinates) {
       int lat = (point.latitude * 1e5).round();
       int lng = (point.longitude * 1e5).round();
-      
+
       int deltaLat = lat - prevLat;
       int deltaLng = lng - prevLng;
-      
+
       prevLat = lat;
       prevLng = lng;
-      
+
       result.write(_encodeSignedNumber(deltaLat));
       result.write(_encodeSignedNumber(deltaLng));
     }
-    
+
     return result.toString();
   }
-  
+
   // 부호있는 숫자를 인코딩하는 헬퍼 함수
   String _encodeSignedNumber(int num) {
     int sgnNum = num << 1;
@@ -369,7 +386,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     }
     return _encodeNumber(sgnNum);
   }
-  
+
   // 숫자를 Base64 문자로 인코딩하는 헬퍼 함수
   String _encodeNumber(int num) {
     StringBuffer result = StringBuffer();
@@ -383,6 +400,11 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
   // 폴리라인 업데이트
   void _updatePolyline() {
+    print(' _updatePolyline() 호출됨: ${_polylineCoordinates.length}개 포인트');
+    if (_polylineCoordinates.isEmpty) {
+      print('❌ 폴리라인이 비어있습니다.');
+      return;
+    }
     _polylines = {
       Polyline(
         polylineId: PolylineId('path_taken'),
@@ -391,20 +413,21 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
         width: 5,
       ),
     };
+    print('✅ 폴리라인 세팅 완료 (총 ${_polylines.first.points.length}개)');
   }
 
   // 지도 생성 시 호출
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
-    
+
     // 지도가 생성된 후 현재 위치로 즉시 이동
     _moveToCurrentLocation();
   }
 
   // 현재 위치로 카메라 이동
   void _moveToCurrentLocation() {
-    if (_currentLocation != null && 
-        _currentLocation!.latitude != null && 
+    if (_currentLocation != null &&
+        _currentLocation!.latitude != null &&
         _currentLocation!.longitude != null &&
         _mapController != null) {
       _mapController?.animateCamera(
@@ -495,19 +518,6 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         ElevatedButton.icon(
-                          onPressed: _polylineCoordinates.length > 1 && !_isSaved ? _saveWorkoutData : null,
-                          icon: Icon(
-                            _isSaved ? Icons.check_circle : Icons.save,
-                            size: 16,
-                          ),
-                          label: Text(_isSaved ? '저장됨' : '저장'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _isSaved ? Colors.green : Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          ),
-                        ),
-                        ElevatedButton.icon(
                           onPressed: _finishWorkout,
                           icon: Icon(Icons.stop, size: 16),
                           label: Text('종료'),
@@ -589,7 +599,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   static Duration? getSavedElapsedTime() => savedElapsedTime;
   static List<LatLng>? getSavedPolylineCoordinates() => savedPolylineCoordinates;
   static String? getSavedEncodedPolyline() => savedEncodedPolyline;
-  
+
   // 저장된 데이터 확인 함수
   static void printSavedData() {
     print('=== 저장된 운동 데이터 ===');
@@ -599,7 +609,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     print('인코딩된 폴리라인: ${getSavedEncodedPolyline()?.length ?? 0} 문자');
     print('========================');
   }
-  
+
   // 저장된 데이터 초기화 함수
   static void clearSavedData() {
     savedTotalDistance = null;
