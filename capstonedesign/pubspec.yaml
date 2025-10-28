@@ -31,12 +31,17 @@ dependencies:
   flutter:
     sdk: flutter
   provider: ^6.1.1
+
+  #camera function
+  camera: ^0.10.5+9
+  geocoding: ^2.2.0
   # Firebase core services
 
   firebase_core: ^3.13.1
   firebase_auth: ^5.5.4
   firebase_database: ^11.3.6
   firebase_storage: ^12.4.6
+  firebase_app_check: ^0.3.0+1
   cloud_firestore: ^5.6.8
 
   # Media and image handling
