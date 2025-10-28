@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'Mypage/my_page.dart';
 import 'Community/community_entire.dart';
-import '../Game/gamepage.dart'; // gamepage import
-import 'Flogging/gpt_map.dart'; // 플로깅 경로 선택 화면 import
+import '../Game/gamepage.dart'; 
+import 'Flogging/gpt_map.dart'; 
 
 class HomePage extends StatelessWidget {
   final String userId;
