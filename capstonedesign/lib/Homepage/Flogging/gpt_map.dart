@@ -9,6 +9,7 @@ import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'navigator.dart';
 import 'dart:ui';
 import 'google_map_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PolylineMapScreen extends StatefulWidget {
   final String userId; //userId 추가
@@ -38,7 +39,16 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
   @override
   void initState() {
     super.initState();
-    requestLocation();
+    _waitForUidAndInit();
+  }
+
+  Future<void> _waitForUidAndInit() async {
+    final user = await FirebaseAuth.instance.authStateChanges().firstWhere((u) => u != null);
+    print('✅ UID 로드 완료: ${user?.uid ?? "null"}');
+    if (mounted) {
+      await requestLocation();
+      print('📍 위치 요청 완료: ${currentPosition?.latitude}, ${currentPosition?.longitude}');// ✅ UID가 완전히 로드된 후 위치 요청 시작
+    }
   }
 
   Future<void> requestLocation() async {
@@ -61,6 +71,10 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
   }
 
   Future<void> fetchRouteFromApi() async {
+    print('🚀 fetchRouteFromApi 호출됨');
+    print('현재 UID: ${FirebaseAuth.instance.currentUser?.uid}');
+    print('현재 위치: ${currentPosition?.latitude}, ${currentPosition?.longitude}');
+
     if (currentPosition == null) return;
 
     int? radius = int.tryParse(radiusController.text);
@@ -71,7 +85,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
       _isRouteReady = false;
     });
 
-    final url = Uri.parse('https://routeAPI.inno505.duckdns.org/route');
+    final url = Uri.parse('http://routeapi.inno505.duckdns.org/route/');
 
     try {
       final response = await http.post(
@@ -83,10 +97,16 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
           'distance_m': radius,
         }),
       );
+      print('📡 서버 응답 코드: ${response.statusCode}');
+      print('📡 서버 응답 바디: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final encoded = data['encoded_polyline'];
+        if (encoded.isEmpty) {
+          _showErrorSnackBar('서버가 경로를 반환하지 않았습니다.');
+          return;
+        }
         total_distance_m = data['target_distance_m'];
         walking_time_min = data['walking_time_min'];
 

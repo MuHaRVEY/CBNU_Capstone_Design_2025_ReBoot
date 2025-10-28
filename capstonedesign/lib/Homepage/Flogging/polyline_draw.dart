@@ -4,6 +4,7 @@ import 'package:location/location.dart';
 import 'dart:async'; // StreamSubscription 사용을 위해 import
 import 'dart:math'; // 거리 계산을 위해 import
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LivePolylineMapScreen extends StatefulWidget {
   final String userId;
@@ -42,11 +43,17 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     _initializeLocation();
   }
 
+  Future<String?> _getCurrentUid() async {
+    final user = FirebaseAuth.instance.currentUser;
+    return user?.uid;
+  }
+
   // 위치 초기화 및 추적 시작
   void _initializeLocation() async {
     try {
       // 현재 위치 먼저 가져오기
       _currentLocation = await _location.getLocation();
+      print('초기 위치 획득: ${_currentLocation?.latitude}, ${_currentLocation?.longitude} ');
       if (mounted) {
         setState(() {
           // 위치를 가져온 후 상태 업데이트하여 지도 표시
@@ -117,6 +124,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
     _locationSubscription = _location.onLocationChanged.listen((LocationData currentLocation) {
       if (_isTracking) {
+        print(' 위치 업데이트 수신: ${currentLocation.latitude}, ${currentLocation.longitude}');
         setState(() {
 
           // 이전 위치와 거리 계산
@@ -132,7 +140,12 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
             // 거리 추가
             double distance = _calculateDistance(previousLocation, newLocation);
             _totalDistance += distance;
+            print('✅ 거리 계산 완료: +${distance.toStringAsFixed(2)}m (총: ${_totalDistance.toStringAsFixed(2)}m)');
+          } else {
+            print('⚠️ 위치 데이터 누락: 이전=${_currentLocation?.latitude}, 현재=${currentLocation.latitude}');
+
           }
+
 
           _currentLocation = currentLocation;
           if (currentLocation.latitude != null && currentLocation.longitude != null) {
@@ -216,13 +229,14 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   //  Firebase 누적 통계 업데이트
   Future<void> _updateUserWorkoutData() async {
     try {
-      if (widget.userId.isEmpty){
-        print('userId가 없습니다.');
+      // ✅ Firebase Auth에서 UID 가져오기
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        print('❌ 로그인된 Firebase 유저가 없습니다.');
         return;
       }
-      final userRef =
-      FirebaseDatabase.instance.ref('users/${widget.userId}/workoutStats');
 
+      final userRef = FirebaseDatabase.instance.ref('users/$uid/workoutStats');
       final snapshot = await userRef.get();
 
       double prevDistance = 0;
@@ -246,6 +260,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
       double newAverageSpeed =
           ((prevSpeed * prevSessions) + sessionSpeed) / (prevSessions + 1);
 
+      // ✅ 누적 통계 업데이트
       await userRef.update({
         'totalDistance': prevDistance + sessionDistance,
         'totalTime': prevTime + sessionTime,
@@ -253,16 +268,17 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
         'totalSessions': prevSessions + 1,
         'lastUpdated': DateTime.now().toIso8601String(),
         'lastSession': {
-          'distance': sessionDistance,                // 현재 세션 이동 거리 (m)
-          'time': sessionTime,                        // 현재 세션 시간 (초)
-          'speed': sessionSpeed,                      // 현재 세션 평균 속도 (km/h)
-          'date': DateTime.now().toIso8601String(),   // 운동 종료 시각
+          'distance': sessionDistance,
+          'time': sessionTime,
+          'speed': sessionSpeed,
+          'date': DateTime.now().toIso8601String(),
         },
       });
-      // 각 운동 세션을 개별 기록으로 저장
+
+      // ✅ 개별 세션 기록 추가
       final sessionRef = FirebaseDatabase.instance
-          .ref('users/${widget.userId}/workoutHistory')
-          .push(); // 자동 고유 키 생성
+          .ref('users/$uid/workoutHistory')
+          .push();
 
       await sessionRef.set({
         'distance': sessionDistance,
@@ -270,9 +286,11 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
         'speed': sessionSpeed,
         'date': DateTime.now().toIso8601String(),
       });
-      print(' Firebase 운동 통계 + 개ㅕㄹ 세션 기록 업데이트 완료');
-    } catch (e) {
-      print(' Firebase 운동 통계 업데이트 실패: $e');
+
+      print('✅ Firebase 운동 통계 및 세션 저장 완료 (UID: $uid)');
+    } catch (e, stack) {
+      print('❌ Firebase 운동 통계 업데이트 실패: $e');
+      print(stack);
     }
   }
 
@@ -423,6 +441,11 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
   // 폴리라인 업데이트
   void _updatePolyline() {
+    print(' _updatePolyline() 호출됨: ${_polylineCoordinates.length}개 포인트');
+    if (_polylineCoordinates.isEmpty) {
+      print('❌ 폴리라인이 비어있습니다.');
+      return;
+    }
     _polylines = {
       Polyline(
         polylineId: PolylineId('path_taken'),
@@ -431,6 +454,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
         width: 5,
       ),
     };
+    print('✅ 폴리라인 세팅 완료 (총 ${_polylines.first.points.length}개)');
   }
 
   // 지도 생성 시 호출
