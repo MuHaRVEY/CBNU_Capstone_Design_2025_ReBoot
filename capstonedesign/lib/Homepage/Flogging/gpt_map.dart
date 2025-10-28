@@ -9,9 +9,11 @@ import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'navigator.dart';
 import 'dart:ui';
 import 'google_map_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PolylineMapScreen extends StatefulWidget {
-  const PolylineMapScreen({super.key});
+  final String userId; //userId 추가
+  const PolylineMapScreen({super.key, required this.userId}); //userId 추가
 
   @override
   _PolylineMapScreenState createState() => _PolylineMapScreenState();
@@ -21,7 +23,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
   Set<Polyline> polylines = {};
   LatLng? currentPosition;
   Location location = Location();
-  final TextEditingController radiusController = TextEditingController(text: '200');
+  final TextEditingController radiusController = TextEditingController(text: '5000');
   final PanelController panelController = PanelController();
 
   double _panelSlidePosition = 0.0; // 0.0 ~ 1.0
@@ -31,10 +33,22 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
   bool _isRouteReady = false;
   List<LatLng> _routePoints = [];
 
+  int? total_distance_m = 0;
+  int? walking_time_min = 0;
+
   @override
   void initState() {
     super.initState();
-    requestLocation();
+    _waitForUidAndInit();
+  }
+
+  Future<void> _waitForUidAndInit() async {
+    final user = await FirebaseAuth.instance.authStateChanges().firstWhere((u) => u != null);
+    print('✅ UID 로드 완료: ${user?.uid ?? "null"}');
+    if (mounted) {
+      await requestLocation();
+      print('📍 위치 요청 완료: ${currentPosition?.latitude}, ${currentPosition?.longitude}');// ✅ UID가 완전히 로드된 후 위치 요청 시작
+    }
   }
 
   Future<void> requestLocation() async {
@@ -57,12 +71,21 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
   }
 
   Future<void> fetchRouteFromApi() async {
+    print('🚀 fetchRouteFromApi 호출됨');
+    print('현재 UID: ${FirebaseAuth.instance.currentUser?.uid}');
+    print('현재 위치: ${currentPosition?.latitude}, ${currentPosition?.longitude}');
+
     if (currentPosition == null) return;
 
     int? radius = int.tryParse(radiusController.text);
     if (radius == null || radius <= 0) return;
 
-    final url = Uri.parse('https://routeAPI.inno505.duckdns.org/route');
+    // 로딩 상태 표시
+    setState(() {
+      _isRouteReady = false;
+    });
+
+    final url = Uri.parse('https://routeapi.inno505.duckdns.org/route');
 
     try {
       final response = await http.post(
@@ -71,13 +94,21 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
         body: jsonEncode({
           'lat': currentPosition!.latitude,
           'lon': currentPosition!.longitude,
-          'radius_m': radius,
+          'distance_m': radius,
         }),
       );
+      print('📡 서버 응답 코드: ${response.statusCode}');
+      print('📡 서버 응답 바디: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final encoded = data['encoded_polyline'];
+        if (encoded.isEmpty) {
+          _showErrorSnackBar('서버가 경로를 반환하지 않았습니다.');
+          return;
+        }
+        total_distance_m = data['target_distance_m'];
+        walking_time_min = data['walking_time_min'];
 
         PolylinePoints polylinePoints = PolylinePoints();
         List<PointLatLng> result = polylinePoints.decodePolyline(encoded);
@@ -85,30 +116,42 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
             .map((point) => LatLng(point.latitude, point.longitude))
             .toList();
 
-        
-
         if (polylineCoordinates.isNotEmpty) {
           setState(() {
-          polylines.clear();
-          polylines.add(
-            Polyline(
-              polylineId: PolylineId("route"),
-              points: polylineCoordinates,
-              color: Colors.red,
-              width: 4,
-            ),
-          );
-          _routePoints = polylineCoordinates;
-          _isRouteReady = true;
-        });
+            polylines.clear();
+            polylines.add(
+              Polyline(
+                polylineId: PolylineId("route"),
+                points: polylineCoordinates,
+                color: Colors.red,
+                width: 4,
+              ),
+            );
+            _routePoints = polylineCoordinates;
+            _isRouteReady = true;
+          });
 
-          GoogleMapService().controller?.animateCamera(
-            CameraUpdate.newLatLngZoom(polylineCoordinates.first, 15),
-          );       
+          // 지도 애니메이션 최적화 - 비동기로 처리
+          Future.microtask(() {
+            GoogleMapService().controller?.animateCamera(
+              CameraUpdate.newLatLngZoom(polylineCoordinates.first, 15),
+            );
+          });
         }
+      } else {
+        _showErrorSnackBar('경로를 생성할 수 없습니다. 다시 시도해주세요.');
       }
     } catch (e) {
       print('에러 발생: $e');
+      _showErrorSnackBar('네트워크 오류가 발생했습니다: $e');
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
     }
   }
 
@@ -147,15 +190,26 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                           controller: radiusController,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
-                            labelText: '반경 (m)',
+                            labelText: '플로깅 거리 (m)',
                             border: OutlineInputBorder(),
                           ),
                         ),
                         SizedBox(height: 12),
+                        Text(total_distance_m != null && walking_time_min != null
+                            ? '생성된 경로: 약 ${total_distance_m}m, 예상 소요 시간: 약 ${walking_time_min}분'
+                            : '경로 정보를 불러오세요.'),
                         ElevatedButton(
                           onPressed: fetchRouteFromApi,
-                          child: Text('경로 생성'),
+                          child: Text('경로 생성',
+                          style: TextStyle(
+                            color: Colors.black,
+                            ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color.fromARGB(255, 255, 255, 255),
+                            ),
                         ),
+                        Row( mainAxisAlignment: MainAxisAlignment.center, children: [
                         const SizedBox(height: 8),
                         ElevatedButton(
                           onPressed: _isRouteReady
@@ -164,7 +218,11 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) =>
-                                          NavigationScreen(routePoints: _routePoints),
+                                          NavigationScreen(
+                                            routePoints: _routePoints,
+                                            totalDistanceM: total_distance_m,
+                                            totalTimeMin: walking_time_min,
+                                          ),
                                     ),
                                   );
                                 }
@@ -172,7 +230,10 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _isRouteReady ? Colors.blue : Colors.grey,
                           ),
-                          child: const Text('네비게이션 시작'),
+                          child: const Text('네비게이션 시작',
+                          style: TextStyle(
+                            color: Colors.white,),
+                          ),
                         ),
                          const SizedBox(height: 8),
                          ElevatedButton(
@@ -181,12 +242,20 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => 
-                                LivePolylineMapScreen()
+                                LivePolylineMapScreen(userId: widget.userId)//수정: userId 전달
                                 )
                             );
                           },
-                          child: Text("경로 없이"),
+                          child: Text("경로 없이",
+                          style: TextStyle(
+                            color: Colors.black,),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color.fromARGB(255, 255, 255, 255),
+                          ),
                          )
+                      ]
+                    ),
                       ],
                     ),
                   ),
@@ -205,12 +274,12 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                       GoogleMapService().setController(controller);
                     },
                     myLocationEnabled: true,
-                    myLocationButtonEnabled: false, // 기본 버튼 끔
+                    myLocationButtonEnabled: true, // 기본 버튼 끔
                   ),
                 ),
 
                 // 현재 위치 버튼 (패널 높이에 따라 이동)
-                Positioned(
+                /* Positioned(
                   bottom: lerpDouble(minPanelHeight + 16, maxPanelHeight + 16, _panelSlidePosition)!,
                   right: 16,
                   child: FloatingActionButton(
@@ -224,7 +293,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                     },
                     child: Icon(Icons.my_location),
                   ),
-                ),
+                ), */
               ],
             ),
     );
