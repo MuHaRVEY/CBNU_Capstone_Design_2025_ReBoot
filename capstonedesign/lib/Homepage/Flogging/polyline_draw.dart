@@ -525,7 +525,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
             ),
         ],
       ),
-      floatingActionButton: _currentLocation != null
+      /* floatingActionButton: _currentLocation != null
           ? FloatingActionButton(
               onPressed: () {
                 if (_isTracking) {
@@ -542,7 +542,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
               },
               child: Icon(_isTracking ? Icons.pause : Icons.play_arrow),
             )
-          : null,
+          : null, */
     );
   }
 

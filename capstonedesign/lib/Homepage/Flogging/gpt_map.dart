@@ -21,7 +21,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
   Set<Polyline> polylines = {};
   LatLng? currentPosition;
   Location location = Location();
-  final TextEditingController radiusController = TextEditingController(text: '200');
+  final TextEditingController radiusController = TextEditingController(text: '5000');
   final PanelController panelController = PanelController();
 
   double _panelSlidePosition = 0.0; // 0.0 ~ 1.0
@@ -169,7 +169,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                           controller: radiusController,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
-                            labelText: '반경 (m)',
+                            labelText: '플로깅 거리 (m)',
                             border: OutlineInputBorder(),
                           ),
                         ),
@@ -179,8 +179,16 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                             : '경로 정보를 불러오세요.'),
                         ElevatedButton(
                           onPressed: fetchRouteFromApi,
-                          child: Text('경로 생성'),
+                          child: Text('경로 생성',
+                          style: TextStyle(
+                            color: Colors.black,
+                            ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color.fromARGB(255, 255, 255, 255),
+                            ),
                         ),
+                        Row( mainAxisAlignment: MainAxisAlignment.center, children: [
                         const SizedBox(height: 8),
                         ElevatedButton(
                           onPressed: _isRouteReady
@@ -201,7 +209,10 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _isRouteReady ? Colors.blue : Colors.grey,
                           ),
-                          child: const Text('네비게이션 시작'),
+                          child: const Text('네비게이션 시작',
+                          style: TextStyle(
+                            color: Colors.white,),
+                          ),
                         ),
                          const SizedBox(height: 8),
                          ElevatedButton(
@@ -214,8 +225,16 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                                 )
                             );
                           },
-                          child: Text("경로 없이"),
+                          child: Text("경로 없이",
+                          style: TextStyle(
+                            color: Colors.black,),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color.fromARGB(255, 255, 255, 255),
+                          ),
                          )
+                      ]
+                    ),
                       ],
                     ),
                   ),
@@ -234,12 +253,12 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                       GoogleMapService().setController(controller);
                     },
                     myLocationEnabled: true,
-                    myLocationButtonEnabled: false, // 기본 버튼 끔
+                    myLocationButtonEnabled: true, // 기본 버튼 끔
                   ),
                 ),
 
                 // 현재 위치 버튼 (패널 높이에 따라 이동)
-                Positioned(
+                /* Positioned(
                   bottom: lerpDouble(minPanelHeight + 16, maxPanelHeight + 16, _panelSlidePosition)!,
                   right: 16,
                   child: FloatingActionButton(
@@ -253,7 +272,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                     },
                     child: Icon(Icons.my_location),
                   ),
-                ),
+                ), */
               ],
             ),
     );
