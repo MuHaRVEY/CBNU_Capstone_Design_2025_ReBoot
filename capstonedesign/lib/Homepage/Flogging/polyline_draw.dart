@@ -8,6 +8,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../Camera/camera_page.dart';
 import '../../Firebase/firebase_workout_service.dart';
 
+// ★ 추가: Provider / AdventurePage / PetProvider
+import 'package:provider/provider.dart';
+import 'package:capstonedesign/Game/adventurepage.dart';
+import 'package:capstonedesign/Game/pet_provider.dart';
+
+// ★ 추가: 정지 감지/몬스터 위젯
+import 'package:capstonedesign/common/utils/stationary_detector.dart';
+import 'package:capstonedesign/widgets/bouncing_monster.dart';
+
 class LivePolylineMapScreen extends StatefulWidget {
   final String userId;
   const LivePolylineMapScreen({super.key, required this.userId});
@@ -37,6 +46,18 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   static Duration? savedElapsedTime; // 경과 시간
   static List<LatLng>? savedPolylineCoordinates; // 폴리라인 좌표
   static String? savedEncodedPolyline; // 인코딩된 폴리라인
+
+  // ★ 추가: 정지 감지 & 몬스터 상태
+  final StationaryDetector _detector = StationaryDetector(
+    window: Duration(seconds: 5),
+    distThreshold: 5.0,
+    speedThreshold: 0.5,
+  );
+  DateTime? _stationarySince;
+  Timer? _idleTick;
+  bool _showMonster = false;
+  Timer? _monsterTTL;
+  final int _petStateForAdventure = 1; // AdventurePage 전달 기본값(필요시 Provider 값으로 대체 가능)
 
   @override
   void initState() {
@@ -81,7 +102,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
     double a = sin(deltaLatRad / 2) * sin(deltaLatRad / 2) +
         cos(lat1Rad) * cos(lat2Rad) *
-        sin(deltaLngRad / 2) * sin(deltaLngRad / 2);
+            sin(deltaLngRad / 2) * sin(deltaLngRad / 2);
     double c = 2 * atan2(sqrt(a), sqrt(1 - a));
 
     return earthRadius * c;
@@ -104,6 +125,35 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     _timer = null;
   }
 
+  // ★ 추가: 정지 10초 체크 시작
+  void _startIdleCheckTimer() {
+    _idleTick?.cancel();
+    _idleTick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_stationarySince == null || _showMonster == true) return;
+      final secs = DateTime.now().difference(_stationarySince!).inSeconds;
+      if (secs >= 10) {
+        _summonMonster();
+      }
+    });
+  }
+
+  // ★ 추가: 몬스터 소환/숨김
+  void _summonMonster() {
+    if (!mounted) return;
+    setState(() => _showMonster = true);
+    _monsterTTL?.cancel();
+    _monsterTTL = Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      setState(() => _showMonster = false); // 5초 내 터치 없으면 사라짐
+    });
+  }
+
+  void _hideMonster() {
+    if (!mounted) return;
+    _monsterTTL?.cancel();
+    setState(() => _showMonster = false);
+  }
+
   // 위치 추적 시작
   void _startTrackingLocation() async {
     // 위치 업데이트 설정 (거리 필터, 정확도 등)
@@ -123,6 +173,11 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     clearSavedData();
 
     _startTimer(); // 타이머 시작
+
+    // ★ 추가: 정지 감지 초기화 및 감시 타이머 시작
+    _detector.reset();
+    _stationarySince = null;
+    _startIdleCheckTimer();
 
     _locationSubscription = _location.onLocationChanged.listen((LocationData currentLocation) {
       if (_isTracking) {
@@ -148,6 +203,19 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
           }
 
+          // ★ 추가: 정지 감지 업데이트
+          final lat = currentLocation.latitude;
+          final lon = currentLocation.longitude;
+          if (lat != null && lon != null) {
+            final nowMs = DateTime.now().millisecondsSinceEpoch;
+            final still = _detector.add(lat, lon, currentLocation.speed, nowMs);
+            if (still) {
+              _stationarySince ??= DateTime.now();
+            } else {
+              _stationarySince = null;
+              if (_showMonster) _hideMonster(); // 움직이면 즉시 숨김
+            }
+          }
 
           _currentLocation = currentLocation;
           if (currentLocation.latitude != null && currentLocation.longitude != null) {
@@ -192,6 +260,12 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     });
     _stopTimer(); // 타이머 중지
     _locationSubscription?.cancel(); // 스트림 구독 해제
+
+    // ★ 추가: 정지/몬스터 타이머 정리
+    _idleTick?.cancel();
+    _idleTick = null;
+    _monsterTTL?.cancel();
+    _showMonster = false;
   }
 
   // 운동 종료 (저장하지 않음)
@@ -291,6 +365,27 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                         encodedRoute: routeToSave,
                         pointCount: pointsToSave,
                       );
+
+                      // ===== [추가] 저장 직후 플로깅 전투(자동시작) 진입
+                      try {
+                        final pet = context.read<PetProvider>();
+                        final result = await Navigator.push<Map<String, dynamic>?>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AdventurePage(
+                              petState: pet.petState,
+                              autoStart: true,
+                            ),
+                          ),
+                        );
+                        if (result != null &&
+                            result['entry'] == 'plogging' &&
+                            (result['win'] as bool? ?? false)) {
+                          await pet.levelUpOnce();
+                        }
+                      } catch (e) {
+                        // Provider 미등록 등 예외는 조용히 스킵
+                      }
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -445,27 +540,59 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     return Scaffold(
       body: _currentLocation == null
           ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('현재 위치를 가져오는 중...'),
-                ],
-              ),
-            )
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('현재 위치를 가져오는 중...'),
+          ],
+        ),
+      )
           : Stack(
-              children: [
-                GoogleMap(
-                  onMapCreated: _onMapCreated,
-                  initialCameraPosition: CameraPosition(
-                    target: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
-                    zoom: 18.0,
-                  ),
-                  polylines: _polylines,
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: true,
-                ),
+        children: [
+          GoogleMap(
+            onMapCreated: _onMapCreated,
+            initialCameraPosition: CameraPosition(
+              target: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
+              zoom: 18.0,
+            ),
+            polylines: _polylines,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: true,
+          ),
+
+          // ★ 추가: 떠다니는 몬스터 (정지 10초 후 등장, 5초 내 터치 시 전투 진입)
+          if (_showMonster)
+            BouncingMonsterOverlay(
+              asset: 'assets/images/trash_monster.png',
+              spriteSize: 96,
+              bouncePadding: const EdgeInsets.only(top: 120), // 상단 패널 피하기
+              onTap: () async {
+                _monsterTTL?.cancel();
+                _hideMonster();
+                try {
+                  final pet = context.read<PetProvider>();
+                  final result = await Navigator.push<Map<String, dynamic>?>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AdventurePage(
+                        petState: pet.petState, // 현재 펫 상태 전달
+                        autoStart: true,        // 플로깅 전투
+                      ),
+                    ),
+                  );
+                  if (result != null &&
+                      result['entry'] == 'plogging' &&
+                      (result['win'] as bool? ?? false)) {
+                    await pet.levelUpOnce();   // 성공 시 상태 +1
+                  }
+                } catch (_) {
+                  // Provider 미연결 등은 조용히 무시
+                }
+              },
+            ),
+
           // 상단 정보 패널
           if (_isTracking)
             Positioned(
@@ -590,6 +717,11 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     _mapController?.dispose();
     _locationSubscription?.cancel(); // 위젯 소멸 시 스트림 구독 해제
     _stopTimer(); // 타이머 정리
+
+    // ★ 추가: 정지/몬스터 타이머 정리
+    _idleTick?.cancel();
+    _monsterTTL?.cancel();
+
     super.dispose();
   }
 
