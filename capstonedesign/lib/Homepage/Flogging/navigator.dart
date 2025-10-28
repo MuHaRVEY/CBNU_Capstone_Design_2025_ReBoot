@@ -6,6 +6,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'google_map_service.dart';
+import '../../Firebase/firebase_workout_service.dart';
 
 // 성능 최적화를 위한 상수들
 class NavigationConstants {
@@ -199,7 +200,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   }
 
   // 데이터 저장 함수
-  void _saveNavigationData() {
+  void _saveNavigationData() async {
     // 완료된 거리 계산 (총 거리 - 남은 거리)
     double completed = 0.0;
     if (widget.totalDistanceM != null) {
@@ -224,6 +225,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
     
     // 저장된 데이터 확인
     printSavedNavigationData();
+
+    await FirebaseWorkoutService.saveWorkout(
+      distanceM: completed,
+      duration: _elapsedTime,
+      isNavigation: true, // 네비게이션 데이터임을 명시
+    );
+
+    print('🔥 Firebase에 네비게이션 데이터 저장 완료');
   }
 
   // 완료 다이얼로그 표시

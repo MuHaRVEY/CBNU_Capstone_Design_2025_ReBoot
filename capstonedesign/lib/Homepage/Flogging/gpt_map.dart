@@ -85,7 +85,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
       _isRouteReady = false;
     });
 
-    final url = Uri.parse('http://routeapi.inno505.duckdns.org/route/');
+    final url = Uri.parse('https://routeapi.inno505.duckdns.org/route');
 
     try {
       final response = await http.post(

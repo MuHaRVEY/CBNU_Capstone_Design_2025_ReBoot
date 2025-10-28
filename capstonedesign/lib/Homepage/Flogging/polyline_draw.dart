@@ -5,6 +5,7 @@ import 'dart:async'; // StreamSubscription 사용을 위해 import
 import 'dart:math'; // 거리 계산을 위해 import
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../Firebase/firebase_workout_service.dart';
 
 class LivePolylineMapScreen extends StatefulWidget {
   final String userId;
@@ -203,6 +204,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
   // 데이터 저장 함수
   void _saveWorkoutData() async {
+    print('sawveWorkoutData 호출됨');
     String encodedPolyline = _encodePolyline(_polylineCoordinates);
 
     savedTotalDistance = _totalDistance;
@@ -213,8 +215,13 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     setState(() => _isSaved = true);
 
 
-    //  Firebase 업데이트
-    await _updateUserWorkoutData();
+    await FirebaseWorkoutService.saveWorkout(
+      distanceM: _totalDistance,
+      duration: _elapsedTime,
+      isNavigation: false, // 이건 경로 기록이 아니라 플로깅이므로 false
+    );
+
+    print(' FirebaseWorkoutService.saveWorkout() 저장 완료');
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -224,74 +231,6 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
         backgroundColor: Colors.green,
       ),
     );
-  }
-
-  //  Firebase 누적 통계 업데이트
-  Future<void> _updateUserWorkoutData() async {
-    try {
-      // ✅ Firebase Auth에서 UID 가져오기
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) {
-        print('❌ 로그인된 Firebase 유저가 없습니다.');
-        return;
-      }
-
-      final userRef = FirebaseDatabase.instance.ref('users/$uid/workoutStats');
-      final snapshot = await userRef.get();
-
-      double prevDistance = 0;
-      double prevTime = 0;
-      double prevSpeed = 0;
-      int prevSessions = 0;
-
-      if (snapshot.exists) {
-        final data = Map<String, dynamic>.from(snapshot.value as Map);
-        prevDistance = (data['totalDistance'] ?? 0).toDouble();
-        prevTime = (data['totalTime'] ?? 0).toDouble();
-        prevSpeed = (data['averageSpeed'] ?? 0).toDouble();
-        prevSessions = (data['totalSessions'] ?? 0).toInt();
-      }
-
-      double sessionDistance = _totalDistance;
-      double sessionTime = _elapsedTime.inSeconds.toDouble();
-      double sessionSpeed =
-      sessionTime > 0 ? (sessionDistance / 1000) / (sessionTime / 3600) : 0;
-
-      double newAverageSpeed =
-          ((prevSpeed * prevSessions) + sessionSpeed) / (prevSessions + 1);
-
-      // ✅ 누적 통계 업데이트
-      await userRef.update({
-        'totalDistance': prevDistance + sessionDistance,
-        'totalTime': prevTime + sessionTime,
-        'averageSpeed': newAverageSpeed,
-        'totalSessions': prevSessions + 1,
-        'lastUpdated': DateTime.now().toIso8601String(),
-        'lastSession': {
-          'distance': sessionDistance,
-          'time': sessionTime,
-          'speed': sessionSpeed,
-          'date': DateTime.now().toIso8601String(),
-        },
-      });
-
-      // ✅ 개별 세션 기록 추가
-      final sessionRef = FirebaseDatabase.instance
-          .ref('users/$uid/workoutHistory')
-          .push();
-
-      await sessionRef.set({
-        'distance': sessionDistance,
-        'time': sessionTime,
-        'speed': sessionSpeed,
-        'date': DateTime.now().toIso8601String(),
-      });
-
-      print('✅ Firebase 운동 통계 및 세션 저장 완료 (UID: $uid)');
-    } catch (e, stack) {
-      print('❌ Firebase 운동 통계 업데이트 실패: $e');
-      print(stack);
-    }
   }
 
   // 완료 다이얼로그
