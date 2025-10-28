@@ -306,12 +306,6 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                       // ✅ 저장 후 다이얼로그 닫고 CameraPage로 이동
                       if (mounted) {
                         Navigator.of(context).pop();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => CameraPage(userId: widget.userId),
-                          ),
-                        );
                       }
                     },
                     icon: const Icon(Icons.save),
