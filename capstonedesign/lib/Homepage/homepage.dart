@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'Mypage/my_page.dart';
 import 'Community/community_entire.dart';
-import '../Game/gamepage.dart'; // gmepage import 추가
-import 'Flogging/gpt_map.dart';
-import '../Camera/camera_page.dart'; // 카메라 페이지 테스트, 추후 플로깅 페이지에 수정
+import '../Game/gamepage.dart'; // gamepage import
+import 'Flogging/gpt_map.dart'; // 플로깅 경로 선택 화면 import
 
 class HomePage extends StatelessWidget {
   final String userId;
@@ -50,6 +49,7 @@ class HomePage extends StatelessWidget {
                 ),
                 Column(
                   children: [
+                    // ✅ 커뮤니티 버튼
                     ElevatedButton.icon(
                       onPressed: () {
                         Navigator.push(
@@ -76,49 +76,19 @@ class HomePage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
+
+                    // ✅ 플로깅 버튼
                     ElevatedButton.icon(
                       onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => PolylineMapScreen(userId: userId,),
+                            builder: (context) => PolylineMapScreen(userId: userId),
                           ),
                         );
                       },
                       icon: const Icon(Icons.map_outlined),
                       label: const Text('플로깅'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        minimumSize: const Size(250, 50),
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12), // 카메라 테스트(임시)
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        // ✅ 현재는 HomePage에서 바로 CameraPage로 이동해서 테스트
-                        final result = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => CameraPage(userId: userId),
-                          ),
-                        );
-
-                        if (result != null) {
-                          // ✅ 나중에는 Plogging 화면에서 결과(URL)를 받아 처리하도록 변경 예정
-                          // 예: 플로깅 중 찍은 사진 → Firebase 저장 → AI 분류 → 결과 반영
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("사진 업로드 완료! URL: $result")),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.camera_alt_outlined),
-                      label: const Text('카메라 테스트'), // ✅ 나중에 Plogging 화면에서는 '사진 찍기' 버튼으로 수정 가능
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
@@ -202,4 +172,3 @@ class HomePage extends StatelessWidget {
     );
   }
 }
-
