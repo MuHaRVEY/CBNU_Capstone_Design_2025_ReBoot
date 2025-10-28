@@ -222,6 +222,7 @@ class _PolylineMapScreenState extends State<PolylineMapScreen> {
                                             routePoints: _routePoints,
                                             totalDistanceM: total_distance_m,
                                             totalTimeMin: walking_time_min,
+                                            userId: widget.userId,
                                           ),
                                     ),
                                   );

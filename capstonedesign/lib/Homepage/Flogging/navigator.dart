@@ -6,6 +6,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'google_map_service.dart';
+import '../../Camera/camera_page.dart';
 import '../../Firebase/firebase_workout_service.dart';
 
 // 성능 최적화를 위한 상수들
@@ -24,12 +25,14 @@ class NavigationScreen extends StatefulWidget {
   final List<LatLng> routePoints;
   final int? totalDistanceM;
   final int? totalTimeMin;
+  final String userId;
 
   const NavigationScreen({
     super.key, 
     required this.routePoints,
     this.totalDistanceM,
     this.totalTimeMin,
+    required this.userId,
   });
 
   @override
@@ -301,6 +304,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
                     onPressed: () {
                       _saveNavigationData();
                       setDialogState(() {}); // 다이얼로그 상태 업데이트
+
+                      Navigator.of(context).pop(); // 다이얼로그 닫기
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CameraPage(userId: widget.userId),
+                        ),
+                      );
                       
                       // 저장 완료 스낵바 표시
                       ScaffoldMessenger.of(context).showSnackBar(

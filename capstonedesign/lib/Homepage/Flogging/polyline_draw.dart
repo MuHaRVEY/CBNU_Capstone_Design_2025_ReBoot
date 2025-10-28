@@ -5,6 +5,7 @@ import 'dart:async'; // StreamSubscription 사용을 위해 import
 import 'dart:math'; // 거리 계산을 위해 import
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../Camera/camera_page.dart';
 import '../../Firebase/firebase_workout_service.dart';
 
 class LivePolylineMapScreen extends StatefulWidget {
@@ -226,7 +227,6 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                   Text('기록된 경로: ${_polylineCoordinates.length}개 포인트'),
                   const SizedBox(height: 16),
 
-                  // ✅ 기존 문구 유지
                   if (!_isSaved)
                     Text(
                       '운동을 저장하시겠습니까?',
@@ -236,7 +236,6 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                       ),
                     ),
 
-                  // ✅ 새로 추가된 경로 저장 선택
                   if (!_isSaved)
                     CheckboxListTile(
                       title: const Text('이 경로(Polyline)도 저장하기'),
@@ -249,12 +248,13 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                       controlAffinity: ListTileControlAffinity.leading,
                     ),
 
-
                   if (_isSaved)
                     const Text(
                       '데이터가 저장되었습니다!',
-                      style:
-                      TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                 ],
               ),
@@ -269,47 +269,47 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                   ),
                   ElevatedButton.icon(
                     onPressed: () async {
-                      // 1. 인코딩된 폴리라인 계산 (삭제된 _saveWorkoutData의 핵심 기능)
                       String encodedPolyline = _encodePolyline(_polylineCoordinates);
 
-                      // 2. UI 상태 변경
                       setState(() => _isSaved = true);
                       setDialogState(() {
                         _isSaved = true;
                       });
 
-                      // 3. 로직 분기 (하나의 함수 호출)
                       String? routeToSave;
                       int? pointsToSave;
 
-                      // ⭐️ `saveRoute` 체크박스 변수를 사용
                       if (saveRoute) {
-                        // 3a. 경로 저장 O (체크함)
                         routeToSave = encodedPolyline;
                         pointsToSave = _polylineCoordinates.length;
                       }
 
-                      // 3b. 'saveWorkout' 함수 하나만 호출
-                      // ✅ 'saveRouteData' 대신 'saveWorkout'을 호출
                       await FirebaseWorkoutService.saveWorkout(
                         distanceM: _totalDistance,
                         duration: _elapsedTime,
                         isNavigation: false,
-                        encodedRoute: routeToSave,  // 👈 체크 안 했으면 null
-                        pointCount: pointsToSave, // 👈 체크 안 했으면 null
+                        encodedRoute: routeToSave,
+                        pointCount: pointsToSave,
                       );
-                      // 4. 스낵바 표시
-                      if (saveRoute) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('운동 및 경로 데이터 저장 완료 ✅')),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '운동 데이터가 저장되었습니다! (${(_totalDistance / 1000).toStringAsFixed(2)} km)',
-                            ),
-                            backgroundColor: Colors.green,
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            saveRoute
+                                ? '운동 및 경로 데이터 저장 완료 ✅'
+                                : '운동 데이터가 저장되었습니다! (${(_totalDistance / 1000).toStringAsFixed(2)} km)',
+                          ),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+
+                      // ✅ 저장 후 다이얼로그 닫고 CameraPage로 이동
+                      if (mounted) {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CameraPage(userId: widget.userId),
                           ),
                         );
                       }
@@ -322,10 +322,16 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                     ),
                   ),
                 ] else ...[
+                  // ✅ 여기 수정됨
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).pop();
+                      Navigator.of(context).pop(); // 다이얼로그 닫기
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CameraPage(userId: widget.userId),
+                        ),
+                      ); // ✅ CameraPage로 이동
                     },
                     child: const Text('확인'),
                   ),
@@ -337,7 +343,6 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
       },
     );
   }
-
   // 시간 포맷팅 함수
   String _formatDuration(Duration duration) {
     int hours = duration.inHours;
