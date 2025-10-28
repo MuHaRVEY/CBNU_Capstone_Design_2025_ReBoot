@@ -7,11 +7,14 @@ class FirebaseWorkoutService {
   static final _auth = FirebaseAuth.instance;
 
   /// 운동 기록 저장 (공통 함수)
+  // ✅ encodedRoute와 pointCount를 옵셔널 인자로 추가
   static Future<void> saveWorkout({
     required double distanceM,
     required Duration duration,
     double? avgSpeedKmh,
     bool isNavigation = false,
+    String? encodedRoute, // 👈 옵셔널 경로
+    int? pointCount,     // 👈 옵셔널 좌표 개수
   }) async {
     try {
       final uid = _auth.currentUser?.uid;
@@ -19,6 +22,9 @@ class FirebaseWorkoutService {
         print('❌ Firebase 저장 실패: 로그인된 사용자 없음');
         return;
       }
+
+      // ✅ 경로 저장 여부를 플래그로 관리
+      final bool savedRoute = encodedRoute != null;
 
       final userRef = _db.ref('users/$uid/workoutStats');
       final snapshot = await userRef.get();
@@ -41,8 +47,10 @@ class FirebaseWorkoutService {
               ? (distanceM / 1000) / (duration.inSeconds / 3600)
               : 0);
 
-      final newAverageSpeed =
-          ((prevSpeed * prevSessions) + sessionSpeed) / (prevSessions + 1);
+      // ✅ 첫 세션일 경우 분모 0 오류 방지
+      final newAverageSpeed = (prevSessions > 0)
+          ? ((prevSpeed * prevSessions) + sessionSpeed) / (prevSessions + 1)
+          : sessionSpeed;
 
       // ✅ 누적 통계 업데이트
       await userRef.update({
@@ -56,26 +64,39 @@ class FirebaseWorkoutService {
           'time': duration.inSeconds,
           'speed': sessionSpeed,
           'isNavigation': isNavigation,
+          'savedRoute': savedRoute, // ✅ 경로 저장 여부 플래그 추가
           'date': DateTime.now().toIso8601String(),
         },
       });
 
-      // ✅ 세션별 히스토리 추가
+      // --- 세션별 히스토리 추가 ---
       final path = isNavigation ? 'navigatorHistory' : 'polylineHistory';
       final sessionRef = _db.ref('users/$uid/$path').push();
 
-      await sessionRef.set({
+      // ✅ 기본 세션 데이터 생성
+      final Map<String, dynamic> sessionData = {
         'distance': distanceM,
         'time': duration.inSeconds,
         'speed': sessionSpeed,
         'date': DateTime.now().toIso8601String(),
-      });
+      };
 
+      // ✅ 경로 데이터가 있으면 (체크했으면) 맵에 추가
+      if (savedRoute) {
+        sessionData['encodedRoute'] = encodedRoute;
+        sessionData['pointCount'] = pointCount;
+      }
+
+      // ✅ 데이터 저장
+      await sessionRef.set(sessionData);
+
+      // ✅ 로그 메시지 수정
       print(
-          '✅ Firebase ${isNavigation ? "네비게이션" : "플로깅"} 데이터 저장 완료 (${(distanceM / 1000).toStringAsFixed(2)} km)');
+          ' Firebase ${isNavigation ? "네비게이션" : "플로깅"} ${savedRoute ? "(경로 포함)" : "(경로 없음)"} 저장 완료 (${(distanceM / 1000).toStringAsFixed(2)} km)');
     } catch (e, stack) {
-      print('❌ Firebase 저장 중 오류: $e');
+      print(' Firebase 저장 중 오류: $e');
       print(stack);
     }
   }
+
 }

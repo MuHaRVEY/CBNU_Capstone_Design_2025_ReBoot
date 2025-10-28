@@ -203,38 +203,12 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   }
 
   // 데이터 저장 함수
-  void _saveWorkoutData() async {
-    print('sawveWorkoutData 호출됨');
-    String encodedPolyline = _encodePolyline(_polylineCoordinates);
 
-    savedTotalDistance = _totalDistance;
-    savedElapsedTime = _elapsedTime;
-    savedPolylineCoordinates = List.from(_polylineCoordinates);
-    savedEncodedPolyline = encodedPolyline;
-
-    setState(() => _isSaved = true);
-
-
-    await FirebaseWorkoutService.saveWorkout(
-      distanceM: _totalDistance,
-      duration: _elapsedTime,
-      isNavigation: false, // 이건 경로 기록이 아니라 플로깅이므로 false
-    );
-
-    print(' FirebaseWorkoutService.saveWorkout() 저장 완료');
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '운동 데이터가 저장되었습니다! (${(_totalDistance / 1000).toStringAsFixed(2)} km)',
-        ),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
 
   // 완료 다이얼로그
   void _showCompletionDialog() {
+    bool saveRoute = false; // ✅ 경로 저장 여부 추가
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -242,7 +216,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('운동 완료! 🎉'),
+              title: const Text('운동 완료! 🎉'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,52 +224,98 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                   Text('총 이동 거리: ${(_totalDistance / 1000).toStringAsFixed(2)} km'),
                   Text('총 소요 시간: ${_formatDuration(_elapsedTime)}'),
                   Text('기록된 경로: ${_polylineCoordinates.length}개 포인트'),
-                  if (_isSaved) ...[
-                    Text('인코딩된 경로 길이: ${savedEncodedPolyline?.length ?? 0}자'),
-                    SizedBox(height: 16),
-                    Text('데이터가 저장되었습니다!',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                    SizedBox(height: 8),
-                    Text('인코딩된 폴리라인:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    Container(
-                      height: 60,
-                      width: double.infinity,
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: SingleChildScrollView(
-                        child: Text(
-                          savedEncodedPolyline ?? '',
-                          style: TextStyle(fontSize: 10, fontFamily: 'monospace'),
-                        ),
+                  const SizedBox(height: 16),
+
+                  // ✅ 기존 문구 유지
+                  if (!_isSaved)
+                    Text(
+                      '운동을 저장하시겠습니까?',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
                       ),
                     ),
-                  ] else ...[
-                    SizedBox(height: 16),
-                    Text('운동을 저장하시겠습니까?',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
-                  ],
+
+                  // ✅ 새로 추가된 경로 저장 선택
+                  if (!_isSaved)
+                    CheckboxListTile(
+                      title: const Text('이 경로(Polyline)도 저장하기'),
+                      value: saveRoute,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          saveRoute = value ?? false;
+                        });
+                      },
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+
+
+                  if (_isSaved)
+                    const Text(
+                      '데이터가 저장되었습니다!',
+                      style:
+                      TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
                 ],
               ),
               actions: [
                 if (!_isSaved) ...[
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pop(); // 다이얼로그 닫기
-                      Navigator.of(context).pop(); // 이전 화면으로 돌아가기
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop();
                     },
-                    child: Text('저장 안함'),
+                    child: const Text('저장 안함'),
                   ),
                   ElevatedButton.icon(
-                    onPressed: () {
-                      _saveWorkoutData();
-                      setDialogState(() {}); // 다이얼로그 상태 업데이트
+                    onPressed: () async {
+                      // 1. 인코딩된 폴리라인 계산 (삭제된 _saveWorkoutData의 핵심 기능)
+                      String encodedPolyline = _encodePolyline(_polylineCoordinates);
+
+                      // 2. UI 상태 변경
+                      setState(() => _isSaved = true);
+                      setDialogState(() {
+                        _isSaved = true;
+                      });
+
+                      // 3. 로직 분기 (하나의 함수 호출)
+                      String? routeToSave;
+                      int? pointsToSave;
+
+                      // ⭐️ `saveRoute` 체크박스 변수를 사용
+                      if (saveRoute) {
+                        // 3a. 경로 저장 O (체크함)
+                        routeToSave = encodedPolyline;
+                        pointsToSave = _polylineCoordinates.length;
+                      }
+
+                      // 3b. 'saveWorkout' 함수 하나만 호출
+                      // ✅ 'saveRouteData' 대신 'saveWorkout'을 호출
+                      await FirebaseWorkoutService.saveWorkout(
+                        distanceM: _totalDistance,
+                        duration: _elapsedTime,
+                        isNavigation: false,
+                        encodedRoute: routeToSave,  // 👈 체크 안 했으면 null
+                        pointCount: pointsToSave, // 👈 체크 안 했으면 null
+                      );
+                      // 4. 스낵바 표시
+                      if (saveRoute) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('운동 및 경로 데이터 저장 완료 ✅')),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '운동 데이터가 저장되었습니다! (${(_totalDistance / 1000).toStringAsFixed(2)} km)',
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
                     },
-                    icon: Icon(Icons.save),
-                    label: Text('저장'),
+                    icon: const Icon(Icons.save),
+                    label: const Text('저장'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
@@ -304,10 +324,10 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                 ] else ...[
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pop(); // 다이얼로그 닫기
-                      Navigator.of(context).pop(); // 이전 화면으로 돌아가기
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop();
                     },
-                    child: Text('확인'),
+                    child: const Text('확인'),
                   ),
                 ],
               ],
@@ -497,19 +517,6 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        ElevatedButton.icon(
-                          onPressed: _polylineCoordinates.length > 1 && !_isSaved ? _saveWorkoutData : null,
-                          icon: Icon(
-                            _isSaved ? Icons.check_circle : Icons.save,
-                            size: 16,
-                          ),
-                          label: Text(_isSaved ? '저장됨' : '저장'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _isSaved ? Colors.green : Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          ),
-                        ),
                         ElevatedButton.icon(
                           onPressed: _finishWorkout,
                           icon: Icon(Icons.stop, size: 16),
