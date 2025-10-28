@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 
-import 'homepage.dart';
+import 'package:capstonedesign/Homepage/homepage.dart';
 import 'login_page.dart';
 
 class AutoLoginRedirect extends StatelessWidget {

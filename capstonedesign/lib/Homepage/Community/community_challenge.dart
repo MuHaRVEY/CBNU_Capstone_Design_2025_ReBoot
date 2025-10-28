@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'community_makechallenge.dart';
-import 'community_challenge_detail.dart'; // 상세페이지 import 추가
+import 'community_challenge_detail.dart';
 
 class CommunityChallengePage extends StatefulWidget {
   final String userId;
@@ -20,6 +20,25 @@ class CommunityChallengePage extends StatefulWidget {
 }
 
 class _CommunityChallengePageState extends State<CommunityChallengePage> {
+  bool isAdmin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAdmin();
+  }
+
+  /// ✅ DB에서 role 가져오기
+  Future<void> _checkAdmin() async {
+    final snapshot = await FirebaseDatabase.instance
+        .ref('users/${widget.userId}/role')
+        .get();
+
+    if (snapshot.exists && snapshot.value == "admin") {
+      setState(() => isAdmin = true);
+    }
+  }
+
   Future<void> _goToMakeChallenge() async {
     await Navigator.push(
       context,
@@ -31,7 +50,7 @@ class _CommunityChallengePageState extends State<CommunityChallengePage> {
         ),
       ),
     );
-    // StreamBuilder가 알아서 갱신
+    // StreamBuilder가 자동으로 갱신
   }
 
   @override
@@ -52,9 +71,11 @@ class _CommunityChallengePageState extends State<CommunityChallengePage> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+                if (!snapshot.hasData ||
+                    snapshot.data!.snapshot.value == null) {
                   return const Center(child: Text('등록된 챌린지가 없습니다.'));
                 }
+
                 final data = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
                 final challengeList = data.entries.toList().reversed.toList();
 
@@ -63,7 +84,8 @@ class _CommunityChallengePageState extends State<CommunityChallengePage> {
                   itemCount: challengeList.length,
                   itemBuilder: (context, index) {
                     final challengeId = challengeList[index].key.toString();
-                    final challenge = Map<String, dynamic>.from(challengeList[index].value);
+                    final challenge = Map<String, dynamic>.from(
+                        challengeList[index].value);
 
                     return Card(
                       color: Colors.white.withOpacity(0.95),
@@ -74,11 +96,11 @@ class _CommunityChallengePageState extends State<CommunityChallengePage> {
                       child: ListTile(
                         title: Text(
                           challenge['name'] ?? '',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                         subtitle: Text(challenge['description'] ?? ''),
                         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                        // 상세페이지로 이동만!
                         onTap: () {
                           Navigator.push(
                             context,
@@ -101,11 +123,14 @@ class _CommunityChallengePageState extends State<CommunityChallengePage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.green.shade600,
-        child: const Icon(Icons.add),
-        onPressed: _goToMakeChallenge,
-      ),
+      // ✅ 관리자만 FAB 표시
+      floatingActionButton: isAdmin
+          ? FloatingActionButton(
+              backgroundColor: Colors.green.shade600,
+              child: const Icon(Icons.add),
+              onPressed: _goToMakeChallenge,
+            )
+          : null,
     );
   }
 }
