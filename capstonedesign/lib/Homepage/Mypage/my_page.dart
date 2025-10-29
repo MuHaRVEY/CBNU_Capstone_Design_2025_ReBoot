@@ -7,6 +7,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:capstonedesign/Homepage/Community/community_detail.dart';
 import 'package:capstonedesign/Homepage/Community/community_challenge_detail.dart';
+import '../Flogging/route_detail.dart';
 
 class MyPage extends StatefulWidget {
   final String userId;
@@ -33,13 +34,15 @@ class _MyPageState extends State<MyPage> {
   int postCount = 0;
   int challengeCount = 0;
   List<String> currentChallenges = [];
+
   List<String> myPosts = [];
   List<String> likedPosts = [];
   String profileImageUrl = '';
 
   Map<String, dynamic>? lastSession;
   List<Map<String, dynamic>> workoutHistory = [];
-
+  List<Map<String, dynamic>> ploggingRoutes = [];
+  List<String> currentChallengeIds = [];
   final String defaultImagePath = 'assets/images/image_firstpage_login.png';
 
   @override
@@ -59,7 +62,7 @@ class _MyPageState extends State<MyPage> {
 
       if (data['workoutStats'] != null) {
         final stats = Map<String, dynamic>.from(data['workoutStats']);
-        totalDistance = (stats['totalDistance'] ?? 0).toDouble();
+        totalDistance = (stats['totalDistance'] ?? 0).toDouble(); // ✅ 'm' 단위로 로드됨
         totalTime = (stats['totalTime'] ?? 0).toDouble();
         averageSpeed = (stats['averageSpeed'] ?? 0).toDouble();
         totalSessions = (stats['totalSessions'] ?? 0).toInt();
@@ -72,12 +75,16 @@ class _MyPageState extends State<MyPage> {
       setState(() {
         name = data['nickname'] ?? widget.nickname;
         statusMessage = data['statusMessage'] ?? '';
-        currentChallenges = List<String>.from(data['currentChallenges'] ?? []);
+
         profileImageUrl = data['profileImageUrl'] ?? '';
+        totalDistance = totalDistance;
+        totalTime = totalTime;
+        averageSpeed = averageSpeed;
+        totalSessions = totalSessions;
       });
     }
 
-    // ✅ 게시글 개수 자동 계산
+    // ✅ 게시글 개수 자동 계산 (기존과 동일)
     final postsSnapshot =
     await FirebaseDatabase.instance.ref('community_posts').get();
 
@@ -89,13 +96,10 @@ class _MyPageState extends State<MyPage> {
 
       posts.forEach((key, value) {
         if (value is Map) {
-          // 내가 쓴 게시글
           if (value['userId'] == widget.userId) {
             myPostCount++;
             tempMyPosts.add(key);
           }
-
-          // 내가 좋아요 누른 게시글
           final likedUsers = value['likedUsers'] as Map<dynamic, dynamic>?;
           if (likedUsers != null && likedUsers.containsKey(widget.userId)) {
             tempLikedPosts.add(key);
@@ -110,35 +114,78 @@ class _MyPageState extends State<MyPage> {
       });
     }
 
-    // ✅ 챌린지 참여 개수 자동 계산
-    final userSnapshot = await FirebaseDatabase.instance
-        .ref('users/${widget.userId}/currentChallenges')
-        .get();
+    //
+    // ✅ 챌린지 참여 개수 및 목록 불러오기 (DB 구조에 맞게 수정됨)
+    final challengeRef = FirebaseDatabase.instance.ref('challenges');
+    final challengeSnapshot = await challengeRef.get();
 
-    if (userSnapshot.exists) {
-      final challenges = List.from(userSnapshot.value as List);
+    if (challengeSnapshot.exists) {
+      final challengesData = Map<String, dynamic>.from(challengeSnapshot.value as Map);
+      final tempChallengeNames = <String>[];
+      final tempChallengeIds = <String>[]; // 챌린지 ID 저장용
+
+      challengesData.forEach((challengeId, challengeValue) {
+        if (challengeValue is Map) {
+          final participants = challengeValue['participants'] as Map<dynamic, dynamic>?;
+
+          // 1. 'participants' 맵이 존재하고
+          // 2. 'participants' 맵에 내 ID(widget.userId)가 'key'로 포함되어 있는지 확인
+          if (participants != null && participants.containsKey(widget.userId)) {
+
+            // ✅ 챌린지 '이름'을 리스트에 추가
+            if (challengeValue['name'] != null) {
+              tempChallengeNames.add(challengeValue['name'] as String);
+            }
+            // ✅ 챌린지 'ID'(Push Key)를 리스트에 추가 (상세보기 이동용)
+            tempChallengeIds.add(challengeId);
+          }
+        }
+      });
+
+      // 3. 찾은 챌린지 목록과 개수를 state에 반영
       setState(() {
-        challengeCount = challenges.length;
+        challengeCount = tempChallengeNames.length;
+        currentChallenges = tempChallengeNames; // 이름 리스트
+        currentChallengeIds = tempChallengeIds; // ID 리스트
       });
     }
 
-    // ✅ 운동 기록 불러오기
+    // ✅ 2. 운동 기록 불러오기 (경로 수정 및 로직 추가)
+    // 'workoutHistory' 대신 'polylineHistory'에서 데이터를 불러옵니다.
     final historyRef =
-    FirebaseDatabase.instance.ref('users/${widget.userId}/workoutHistory');
+    FirebaseDatabase.instance.ref('users/${widget.userId}/polylineHistory');
     final historySnapshot = await historyRef.get();
 
     if (historySnapshot.exists) {
       final historyData = Map<String, dynamic>.from(historySnapshot.value as Map);
-      workoutHistory = historyData.entries.map((e) {
-        final entry = Map<String, dynamic>.from(e.value as Map);
-        entry['key'] = e.key;
-        return entry;
-      }).toList();
-      setState(() {});
+
+      final tempHistory = <Map<String, dynamic>>[];
+      final tempRoutes = <Map<String, dynamic>>[]; // ✅ 경로 목록용 임시 리스트
+
+      historyData.forEach((key, value) {
+        final entry = Map<String, dynamic>.from(value as Map);
+        entry['key'] = key;
+
+        tempHistory.add(entry); // ✅ 모든 기록은 '운동 기록'에 추가
+
+        // ✅ 'nameRoute'나 'encodedRoute'가 있는지 확인
+        if (entry['nameRoute'] != null || entry['encodedRoute'] != null) {
+          tempRoutes.add(entry); // ✅ 경로가 있으면 '플로깅 경로' 목록에도 추가
+        }
+      });
+
+      // ✅ (선택 사항) 최신순으로 정렬
+      tempHistory.sort((a, b) => (b['date'] ?? '').compareTo(a['date'] ?? ''));
+      tempRoutes.sort((a, b) => (b['date'] ?? '').compareTo(a['date'] ?? ''));
+
+      setState(() {
+        workoutHistory = tempHistory;
+        ploggingRoutes = tempRoutes; // ✅ 새로 만든 경로 리스트를 state에 반영
+      });
     }
   }
 
-  /// ✅ 프로필 이미지 업로드
+  /// ✅ 프로필 이미지 업로드 (기존과 동일)
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -208,16 +255,56 @@ class _MyPageState extends State<MyPage> {
           children: [
             const SizedBox(height: 40),
             _buildProfileSection(),
-            const SizedBox(height: 30),
+            const SizedBox(height: 24),
             _buildUnifiedStatsCard(),
-            if (lastSession != null) _buildLastSessionCard(),
-            const SizedBox(height: 16),
-            if (workoutHistory.isNotEmpty) _buildWorkoutHistoryDropdown(),
-            const SizedBox(height: 30),
-            _buildChallengeDropdown(),
-            const SizedBox(height: 16),
-            _buildMyPostsDropdown(),
-            _buildLikedPostsDropdown(),
+
+            // ✅ 운동 기록 보기
+            if (workoutHistory.isNotEmpty)
+              _buildUniformTileContainer(_buildWorkoutHistoryDropdown()),
+
+            // ✅ 나만의 플로깅 경로
+            if (ploggingRoutes.isNotEmpty)
+              _buildUniformTileContainer(
+                ExpansionTile(
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  childrenPadding: const EdgeInsets.only(bottom: 8),
+                  title: const Text(
+                    '📍 나만의 플로깅 경로',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  children: [
+                    ...ploggingRoutes.map((record) {
+                      return ListTile(
+                        leading: const Icon(Icons.route, color: Colors.blueAccent),
+                        title: Text(record['nameRoute'] ?? '이름 없는 경로'),
+                        subtitle: Text(
+                          '${(record['distance'] / 1000).toStringAsFixed(2)} km - '
+                              '${record['date']?.substring(0, 10) ?? ''}',
+                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => FloggingRouteDetailPage(
+                                routeData: record,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    }).toList(),
+                  ],
+                ),
+              ),
+
+            // ✅ 진행중인 챌린지
+            _buildUniformTileContainer(_buildChallengeDropdown()),
+
+            // ✅ 내 게시글 보기
+            _buildUniformTileContainer(_buildMyPostsDropdown()),
+
+            // ✅ 좋아요한 글
+            _buildUniformTileContainer(_buildLikedPostsDropdown(), bottom: 24),
           ],
         ),
       ),
@@ -237,6 +324,25 @@ class _MyPageState extends State<MyPage> {
       ),
     );
   }
+
+  Widget _buildUniformTileContainer(Widget child, {double bottom = 0}) {
+    return Container(
+      margin: EdgeInsets.only(top: 12, bottom: bottom),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+          visualDensity: VisualDensity.compact,
+        ),
+        child: child,
+      ),
+    );
+  }
+
+
 
   Widget _buildProfileSection() => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,7 +373,7 @@ class _MyPageState extends State<MyPage> {
 
   Widget _buildUnifiedStatsCard() {
     return Container(
-      margin: const EdgeInsets.only(top: 10),
+      margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.9),
@@ -292,8 +398,9 @@ class _MyPageState extends State<MyPage> {
             spacing: 12,
             runSpacing: 12,
             children: [
+              // ✅ 4. 'totalDistance'가 미터(m) 단위이므로 km로 변환
               _buildStatItem(Icons.directions_walk, '이동거리',
-                  '${totalDistance.toStringAsFixed(2)} km'),
+                  '${(totalDistance / 1000).toStringAsFixed(2)} km'),
               _buildStatItem(Icons.timer, '운동시간',
                   _formatDuration(Duration(seconds: totalTime.toInt()))),
               _buildStatItem(Icons.speed, '평균속도',
@@ -332,185 +439,174 @@ class _MyPageState extends State<MyPage> {
     );
   }
 
-  Widget _buildLastSessionCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('🏃 최근 운동 기록',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Text('날짜: ${lastSession?['date'] ?? '기록 없음'}'),
-          Text(
-              '이동 거리: ${(lastSession?['distance'] / 1000).toStringAsFixed(2)} km'),
-          Text(
-              '운동 시간: ${_formatDuration(Duration(seconds: (lastSession?['time'] ?? 0).toInt()))}'),
-          Text(
-              '평균 속도: ${(lastSession?['speed'] ?? 0.0).toStringAsFixed(1)} km/h'),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildWorkoutHistoryDropdown() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
+    return ExpansionTile(
+      tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      title: const Text(
+        '📅 운동 기록 보기',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
       ),
-      child: ExpansionTile(
-        title: const Text('📅 운동 기록 보기',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        children: workoutHistory.map((record) {
-          return ListTile(
-            leading: const Icon(Icons.directions_run),
-            title: Text(
-                '${(record['distance'] / 1000).toStringAsFixed(2)} km, ${(record['speed'] ?? 0.0).toStringAsFixed(1)} km/h'),
-            subtitle: Text(record['date'] ?? ''),
-          );
-        }).toList(),
-      ),
+      children: workoutHistory.map((record) {
+        final distanceKm = (record['distance'] / 1000).toStringAsFixed(2);
+        final speed = (record['speed'] ?? 0.0).toStringAsFixed(1);
+        final duration = record['duration'] ?? 0; // 초 단위라 가정
+        final formattedTime = _formatDuration(Duration(seconds: duration.toInt()));
+
+        return ListTile(
+          leading: const Icon(Icons.directions_run, color: Colors.blueAccent),
+          title: Text('$distanceKm km, $speed km/h, $formattedTime'),
+          subtitle: Text(record['date']?.substring(0, 10) ?? ''),
+        );
+      }).toList(),
     );
   }
 
+
   Widget _buildChallengeDropdown() {
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
+    return ExpansionTile(
+      tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      title: const Text(
+        '🏁 진행중인 챌린지',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
       ),
-      child: ExpansionTile(
-        title: const Text('진행중인 챌린지',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        children: [
-          if (currentChallenges.isEmpty)
-            const ListTile(title: Text('진행중인 챌린지가 없습니다.'))
-          else
-            ...currentChallenges.map((challengeName) => ListTile(
-              leading: const Icon(Icons.flag),
-              title:
-              Text(challengeName, style: const TextStyle(fontSize: 14)),
-            )),
-        ],
-      ),
+      children: [
+        if (currentChallenges.isEmpty)
+          const ListTile(title: Text('진행중인 챌린지가 없습니다.'))
+        else
+          ...List.generate(currentChallenges.length, (index) {
+            final String challengeName = currentChallenges[index];
+            final String challengeId = currentChallengeIds[index];
+
+            return FutureBuilder<DataSnapshot>(
+              future: FirebaseDatabase.instance.ref('challenges/$challengeId').get(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return ListTile(title: Text(challengeName));
+                }
+
+                final challengeData =
+                Map<String, dynamic>.from(snapshot.data!.value as Map);
+
+                return ListTile(
+                  leading: const Icon(Icons.flag, color: Colors.orangeAccent),
+                  title: Text(challengeName,
+                      style: const TextStyle(fontSize: 14)),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CommunityChallengeDetailPage(
+                          challengeId: challengeId,
+                          challenge: challengeData,
+                          userId: widget.userId,
+                          nickname: widget.nickname,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          }),
+      ],
     );
   }
 
   Widget _buildMyPostsDropdown() {
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
+    return ExpansionTile(
+      tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      title: const Text(
+        '📰 내 게시글 보기',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
       ),
-      child: ExpansionTile(
-        title: const Text('내 게시글 보기',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        children: myPosts.map((postKey) {
-          return FutureBuilder<DataSnapshot>(
-            future: FirebaseDatabase.instance
-                .ref('community_posts/$postKey')
-                .get(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const ListTile(title: Text('불러오는 중...'));
-              }
-              if (!snapshot.hasData || snapshot.data!.value == null) {
-                return const ListTile(title: Text('삭제된 게시글입니다.'));
-              }
+      children: myPosts.map((postKey) {
+        return FutureBuilder<DataSnapshot>(
+          future:
+          FirebaseDatabase.instance.ref('community_posts/$postKey').get(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const ListTile(title: Text('불러오는 중...'));
+            }
+            if (!snapshot.hasData || snapshot.data!.value == null) {
+              return const ListTile(title: Text('삭제된 게시글입니다.'));
+            }
 
-              final post =
-              Map<String, dynamic>.from(snapshot.data!.value as Map);
-              final title = post['title'] ?? '제목 없음';
+            final post =
+            Map<String, dynamic>.from(snapshot.data!.value as Map);
+            final title = post['title'] ?? '제목 없음';
 
-              return ListTile(
-                leading: const Icon(Icons.article_outlined),
-                title: Text(title, style: const TextStyle(fontSize: 14)),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CommunityDetailPage(
-                        postId: postKey,
-                        userId: widget.userId,
-                        nickname: widget.nickname,
-                      ),
+            return ListTile(
+              leading: const Icon(Icons.article_outlined, color: Colors.green),
+              title: Text(title, style: const TextStyle(fontSize: 14)),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CommunityDetailPage(
+                      postId: postKey,
+                      userId: widget.userId,
+                      nickname: widget.nickname,
                     ),
-                  );
-                },
-              );
-            },
-          );
-        }).toList(),
-      ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      }).toList(),
     );
   }
 
   Widget _buildLikedPostsDropdown() {
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(12),
+    return ExpansionTile(
+      tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      title: const Text(
+        '❤️ 좋아요한 글',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
       ),
-      child: ExpansionTile(
-        title: const Text(
-          '좋아요한 글',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-        ),
-        children: likedPosts.map((postKey) {
-          return FutureBuilder<DataSnapshot>(
-            future: FirebaseDatabase.instance
-                .ref('community_posts/$postKey')
-                .get(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const ListTile(title: Text('불러오는 중...'));
-              }
-              if (!snapshot.hasData || snapshot.data!.value == null) {
-                return const ListTile(title: Text('삭제된 게시글입니다.'));
-              }
+      children: likedPosts.map((postKey) {
+        return FutureBuilder<DataSnapshot>(
+          future:
+          FirebaseDatabase.instance.ref('community_posts/$postKey').get(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const ListTile(title: Text('불러오는 중...'));
+            }
+            if (!snapshot.hasData || snapshot.data!.value == null) {
+              return const ListTile(title: Text('삭제된 게시글입니다.'));
+            }
 
-              final post =
-              Map<String, dynamic>.from(snapshot.data!.value as Map);
-              final title = post['title'] ?? '제목 없음';
+            final post =
+            Map<String, dynamic>.from(snapshot.data!.value as Map);
+            final title = post['title'] ?? '제목 없음';
 
-              return ListTile(
-                leading: const Icon(Icons.favorite, color: Colors.red),
-                title: Text(title, style: const TextStyle(fontSize: 14)),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CommunityDetailPage(
-                        postId: postKey,
-                        userId: widget.userId,
-                        nickname: widget.nickname,
-                      ),
+            return ListTile(
+              leading: const Icon(Icons.favorite, color: Colors.redAccent),
+              title: Text(title, style: const TextStyle(fontSize: 14)),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CommunityDetailPage(
+                      postId: postKey,
+                      userId: widget.userId,
+                      nickname: widget.nickname,
                     ),
-                  );
-                },
-              );
-            },
-          );
-        }).toList(),
-      ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      }).toList(),
     );
   }
-
 
   Widget _buildBottomButton(IconData icon, String label, VoidCallback onTap) =>
       GestureDetector(
@@ -525,4 +621,3 @@ class _MyPageState extends State<MyPage> {
         ),
       );
 }
-
