@@ -1,3 +1,4 @@
+import 'package:capstonedesign/Homepage/static_map_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
@@ -97,7 +98,7 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
     print("🧾 내용: ${_contentController.text.trim()}");
     print("👤 작성자: ${widget.nickname} (${widget.userId})");
     if (_selectedRoute != null) {
-      print("📍 선택된 경로: ${_selectedRoute!['nameRoute']} (${_selectedRoute!['distance']} km)");
+      print("📍 선택된 경로: ${_selectedRoute!['nameRoute']} (${_selectedRoute!['distance']} m)");
     } else {
       print("📍 선택된 경로 없음");
     }
@@ -116,8 +117,8 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
             ? {
                 'name': _selectedRoute!['nameRoute'],
                 'encoded': _selectedRoute!['encodedRoute'],
-                'distanceM': (_selectedRoute!['distance'] ?? 0) * 1000,
-                'duration': '${_selectedRoute!['time'] ?? 0}분',
+                'distanceM': (_selectedRoute!['distance'] ?? 0),
+                'duration': (_selectedRoute!['time'] ?? 0),
               }
             : null,
       });
@@ -224,8 +225,8 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
                       child: ListTile(
                         title: Text(route['nameRoute'] ?? '이름 없는 경로'),
                         subtitle: Text(
-                          '거리 ${(route['distance'] ?? 0.0).toStringAsFixed(2)} km, '
-                          '시간 ${route['time'] ?? 0}분',
+                          '거리 ${(route['distance'] ?? 0.0).toStringAsFixed(2)} m, '
+                          '시간 ${((route['time'] / 60) ?? 0).toStringAsFixed(2)}분',
                         ),
                         trailing: isSelected
                             ? const Icon(Icons.check_circle, color: Colors.blue)
@@ -240,8 +241,17 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
 
             if (_selectedRoute != null &&
                 _selectedRoute!['encodedRoute'] != null)
-              _buildRoutePreview(_selectedRoute!['encodedRoute']),
-
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "🗺 선택한 경로 미리보기",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  StaticMapWidget(encoded: _selectedRoute!['encodedRoute']),
+                ],
+              ),
             const SizedBox(height: 30),
             Center(
               child: ElevatedButton.icon(
@@ -263,7 +273,7 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
   }
 
   /// ✅ 선택한 경로 지도 미리보기
-  Widget _buildRoutePreview(String encoded) {
+  /* Widget _buildRoutePreview(String encoded) {
     print("🗺 지도 미리보기 생성 중...");
     final decoded = _decodePolyline(encoded);
 
@@ -309,5 +319,6 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
         ),
       ],
     );
-  }
+  } */
+  
 }
