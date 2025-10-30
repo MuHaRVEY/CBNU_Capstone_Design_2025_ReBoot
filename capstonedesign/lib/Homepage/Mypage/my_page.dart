@@ -287,6 +287,7 @@ class _MyPageState extends State<MyPage> {
                             MaterialPageRoute(
                               builder: (context) => FloggingRouteDetailPage(
                                 routeData: record,
+                                userId: widget.userId,
                               ),
                             ),
                           );
