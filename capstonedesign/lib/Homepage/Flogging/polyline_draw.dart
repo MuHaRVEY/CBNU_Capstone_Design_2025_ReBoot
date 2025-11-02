@@ -59,6 +59,12 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   Timer? _monsterTTL;
   final int _petStateForAdventure = 1; // AdventurePage 전달 기본값(필요시 Provider 값으로 대체 가능)
 
+  // ★ 추가: 토스트 상태
+  bool _toastVisible = false;
+  String? _toastText;
+  Timer? _toastTimer;
+  bool _monsterDisabled = false; // 성공 후 다시는 등장하지 않게
+
   @override
   void initState() {
     super.initState();
@@ -129,6 +135,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   void _startIdleCheckTimer() {
     _idleTick?.cancel();
     _idleTick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_monsterDisabled) return; // 처치 완료 이후엔 더 이상 소환 X
       if (_stationarySince == null || _showMonster == true) return;
       final secs = DateTime.now().difference(_stationarySince!).inSeconds;
       if (secs >= 10) {
@@ -139,7 +146,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
 
   // ★ 추가: 몬스터 소환/숨김
   void _summonMonster() {
-    if (!mounted) return;
+    if (!mounted || _monsterDisabled) return;
     setState(() => _showMonster = true);
     _monsterTTL?.cancel();
     _monsterTTL = Timer(const Duration(seconds: 5), () {
@@ -152,6 +159,19 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     if (!mounted) return;
     _monsterTTL?.cancel();
     setState(() => _showMonster = false);
+  }
+
+  // ★ 추가: 토스트 헬퍼
+  void _showToast(String msg, {Duration duration = const Duration(seconds: 3)}) {
+    _toastTimer?.cancel();
+    setState(() {
+      _toastText = msg;
+      _toastVisible = true;
+    });
+    _toastTimer = Timer(duration, () {
+      if (!mounted) return;
+      setState(() => _toastVisible = false);
+    });
   }
 
   // 위치 추적 시작
@@ -382,9 +402,26 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                             result['entry'] == 'plogging' &&
                             (result['win'] as bool? ?? false)) {
                           await pet.levelUpOnce();
+                          _monsterDisabled = true; // 앞으로 등장 X
+                          _hideMonster();
+                          _showToast('쓰레기 처치 완료!'); // ★ 성공 토스트
+                        } else {
+                          // 실패 처리: 5분 + 0~120초 랜덤 이후 재등장 예약
+                          _hideMonster();
+                          _showToast('쓰레기 처치 실패...');
+                          final delay = Duration(
+                            minutes: 5,
+                          ) + Duration(
+                            seconds: Random().nextInt(121),
+                          );
+                          Timer(delay, () {
+                            if (!mounted || _monsterDisabled) return;
+                            _summonMonster();
+                          });
                         }
                       } catch (e) {
                         // Provider 미등록 등 예외는 조용히 스킵
+                        print('플로깅 전투 진입 오류: $e');
                       }
 
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -586,6 +623,15 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                       result['entry'] == 'plogging' &&
                       (result['win'] as bool? ?? false)) {
                     await pet.levelUpOnce();   // 성공 시 상태 +1
+                    _monsterDisabled = true;
+                    _showToast('쓰레기 처치 완료!'); // ★ 성공 토스트
+                  } else {
+                    _showToast('쓰레기 처치 실패...');
+                    final delay = Duration(minutes: 5) + Duration(seconds: Random().nextInt(121));
+                    Timer(delay, () {
+                      if (!mounted || _monsterDisabled) return;
+                      _summonMonster();
+                    });
                   }
                 } catch (_) {
                   // Provider 미연결 등은 조용히 무시
@@ -659,6 +705,36 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                 ),
               ),
             ),
+
+          // ✅ 토스트를 항상 최상단에 렌더링 (마지막에 배치)
+          if (_toastVisible && _toastText != null)
+            Positioned(
+              top: 70,
+              left: 24,
+              right: 24,
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _toastVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.80),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _toastText!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
       /* floatingActionButton: _currentLocation != null
@@ -721,6 +797,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
     // ★ 추가: 정지/몬스터 타이머 정리
     _idleTick?.cancel();
     _monsterTTL?.cancel();
+    _toastTimer?.cancel();
 
     super.dispose();
   }
