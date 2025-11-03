@@ -232,6 +232,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
     await FirebaseWorkoutService.saveWorkout(
       distanceM: completed,
       duration: _elapsedTime,
+      ploggingPoints: completed ~/ 1000, // 1000미터당 1포인트
       isNavigation: true, // 네비게이션 데이터임을 명시
     );
 

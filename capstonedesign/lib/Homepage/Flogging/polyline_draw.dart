@@ -395,6 +395,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                         encodedRoute: routeToSave,
                         pointCount: pointsToSave,
                         nameRoute: savedRouteNameController.text,
+                        ploggingPoints: _totalDistance ~/ 1000, // 1000미터당 1포인트
                       );
 
                       // ===== [추가] 저장 직후 플로깅 전투(자동시작) 진입
