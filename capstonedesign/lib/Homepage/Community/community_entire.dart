@@ -215,13 +215,13 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
     );
   }
 
-  Future<void> _clearAdBlock() async {
+  /* Future<void> _clearAdBlock() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('ad_block_until');
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('광고 차단 초기화됨')),
     );
-  }
+  } */
 
   @override
   Widget build(BuildContext context) {
@@ -254,7 +254,7 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                       ),
                     ),
                   ),
-                  Padding(
+                  /* Padding(
                     padding: const EdgeInsets.only(left: 16.0, top: 8.0),
                     child: Align(
                       alignment: Alignment.centerLeft,
@@ -267,7 +267,7 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                         child: const Text('광고 차단 초기화'),
                       ),
                     ),
-                  ),
+                  ), */
                   const SizedBox(height: 8),
 
                   /// ✅ 여기 부분 수정됨 — 커뮤니티와 같은 행에 뒤로가기 버튼 추가
