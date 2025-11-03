@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -15,7 +14,7 @@ class NavigationConstants {
   static const int routeUpdateIntervalMs = 2000; // 2초마다 경로 업데이트
   static const int ttsIntervalMs = 5000; // 5초마다 TTS 가능
   static const double minMovementDistanceM = 3.0; // 3m 이상 이동시에만 처리
-  static const double proximityThresholdM = 15.0; // 포인트 도달 임계값
+  static const double proximityThresholdM = 5.0; // 포인트 도달 임계값
   static const double offRouteThresholdM = 30.0; // 경로 이탈 임계값
   static const double walkingSpeedMPerMin = 83.33; // 5km/h = 83.33m/min
   static const double distanceUpdateThresholdM = 5.0; // UI 업데이트 임계값
@@ -66,6 +65,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   static List<LatLng>? savedRoutePoints;
   static int? savedTotalDistanceM;
   static int? savedTotalTimeMin;
+  static int? savedPloggingPoints;
   
   // 성능 최적화 변수들
   DateTime? lastLocationUpdate;
@@ -73,13 +73,30 @@ class _NavigationScreenState extends State<NavigationScreen> {
   DateTime? lastTtsAnnouncement;
   double? cachedRemainingDistance;
   LatLng? lastProcessedLocation;
+  int? _lastCachedPointIndex;
   
   // 업데이트 임계값들 (상수로 이동됨)
 
   @override
   void initState() {
     super.initState();
+    // 사이클 경로 검증: 시작점과 끝점이 다르면 시작점을 마지막에 추가
+    _ensureCycleRoute();
     initNavigation();
+  }
+
+  void _ensureCycleRoute() {
+    if (widget.routePoints.length < 2) return;
+    
+    final firstPoint = widget.routePoints.first;
+    final lastPoint = widget.routePoints.last;
+    
+    // 시작점과 끝점이 같은지 확인 (좌표 직접 비교로 최적화)
+    if ((firstPoint.latitude - lastPoint.latitude).abs() > 0.0001 || 
+        (firstPoint.longitude - lastPoint.longitude).abs() > 0.0001) {
+      widget.routePoints.add(firstPoint);
+      print('🔄 사이클 경로 완성: 시작점 추가');
+    }
   }
 
   Future<void> initNavigation() async {
@@ -116,6 +133,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
         );
         isLoading = false;
       });
+
+      print('🗺️ 네비게이션 초기화 완료');
+      print('📍 경로 포인트: ${widget.routePoints.length}개');
+
+      // 초기 경로 및 마커 업데이트
+      updateRemainingRoute();
 
       startListeningLocation();
     } catch (e) {
@@ -204,39 +227,27 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   // 데이터 저장 함수
   void _saveNavigationData() async {
-    // 완료된 거리 계산 (총 거리 - 남은 거리)
-    double completed = 0.0;
-    if (widget.totalDistanceM != null) {
-      completed = widget.totalDistanceM! - remainingDistance;
-    }
+    double completed = widget.totalDistanceM != null 
+        ? widget.totalDistanceM! - remainingDistance 
+        : completedDistance;
     
-    // 모든 네비게이션 데이터 저장
     savedCompletedDistance = completed;
     savedElapsedTime = _elapsedTime;
-    savedRoutePoints = List.from(widget.routePoints);
+    savedRoutePoints = widget.routePoints;
     savedTotalDistanceM = widget.totalDistanceM;
     savedTotalTimeMin = widget.totalTimeMin;
+    savedPloggingPoints = (completed ~/ 1000);
     
     setState(() {
       _isSaved = true;
     });
-    
-    print('저장된 네비게이션 데이터:');
-    print('완료 거리: ${(completed / 1000).toStringAsFixed(2)} km');
-    print('경과 시간: ${_formatDuration(_elapsedTime)}');
-    print('전체 거리: ${widget.totalDistanceM != null ? (widget.totalDistanceM! / 1000).toStringAsFixed(2) : "N/A"} km');
-    
-    // 저장된 데이터 확인
-    printSavedNavigationData();
 
     await FirebaseWorkoutService.saveWorkout(
       distanceM: completed,
       duration: _elapsedTime,
-      ploggingPoints: completed ~/ 1000, // 1000미터당 1포인트
-      isNavigation: true, // 네비게이션 데이터임을 명시
+      ploggingPoints: savedPloggingPoints ?? 0,
+      isNavigation: true,
     );
-
-    print('🔥 Firebase에 네비게이션 데이터 저장 완료');
   }
 
   // 완료 다이얼로그 표시
@@ -340,7 +351,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
                   TextButton(
                     onPressed: () {
                       Navigator.of(context).pop(); // 다이얼로그 닫기
-                      Navigator.of(context).pop(); // 이전 화면으로 돌아가기
+                     Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CameraPage(userId: widget.userId),
+                        ),
+                    );
                     },
                     child: Text('확인'),
                   ),
@@ -395,30 +411,20 @@ class _NavigationScreenState extends State<NavigationScreen> {
             lastLocationUpdate = now;
             lastProcessedLocation = currentLatLng;
 
-            // 카메라 업데이트 (비동기로 처리)
+            // 카메라 업데이트
             GoogleMapService().controller?.animateCamera(
               CameraUpdate.newLatLng(currentLatLng),
             );
 
             await checkProximityToRoute(currentLatLng);
-            
-            // 경로 업데이트 빈도 제한
-            if (lastRouteUpdate == null ||
-                now.difference(lastRouteUpdate!).inMilliseconds >= NavigationConstants.routeUpdateIntervalMs) {
-              updateRemainingRoute();
-              lastRouteUpdate = now;
-            }
+            updateRemainingRoute();
+            lastRouteUpdate = now;
           } catch (e) {
             print('위치 업데이트 처리 중 오류: $e');
           }
         },
         onError: (error) {
           print('위치 추적 중 오류 발생: $error');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('위치 추적에 오류가 발생했습니다: $error')),
-            );
-          }
         },
       );
     } catch (e) {
@@ -427,71 +433,63 @@ class _NavigationScreenState extends State<NavigationScreen> {
   }
 
   Future<void> checkProximityToRoute(LatLng current) async {
-    if (widget.routePoints.length < 2) return;
+    if (widget.routePoints.length < 2 || nextPointIndex >= widget.routePoints.length) return;
 
     try {
       final now = DateTime.now();
-      double distanceToNext =
-          calculateDistance(current, widget.routePoints[nextPointIndex]);
+      final double distanceToNext = calculateDistance(current, widget.routePoints[nextPointIndex]);
 
-      if (distanceToNext < NavigationConstants.proximityThresholdM && nextPointIndex < widget.routePoints.length - 1) {
-        nextPointIndex++;
+      // 포인트 도달 확인
+      if (distanceToNext < NavigationConstants.proximityThresholdM) {
+        if (nextPointIndex == widget.routePoints.length - 1) {
+          // 목적지 도착
+          if (!_isNavigationComplete) {
+            _isNavigationComplete = true;
+            _onNavigationComplete();
+          }
+          return;
+        }
         
-        // TTS 빈도 제한
+        // 다음 포인트로 이동
+        nextPointIndex++;
+        cachedRemainingDistance = null; // 캐시 무효화
+        
+        // TTS 안내 (빈도 제한)
         if (lastTtsAnnouncement == null ||
             now.difference(lastTtsAnnouncement!).inMilliseconds >= NavigationConstants.ttsIntervalMs) {
-          try {
-            await flutterTts.speak("경로를 따라 이동 중입니다");
-            lastTtsAnnouncement = now;
-          } catch (e) {
-            print('TTS 오류: $e');
-          }
+          flutterTts.speak("경로를 따라 이동 중입니다");
+          lastTtsAnnouncement = now;
         }
         
-        // 다음 포인트 도달 시에만 경로 업데이트
         updateRemainingRoute();
         lastRouteUpdate = now;
-        // 캐시 무효화
-        cachedRemainingDistance = null;
-      }
-      
-      // 목적지 도달 확인 (마지막 포인트에 근접)
-      if (nextPointIndex == widget.routePoints.length - 1 && 
-          distanceToNext < NavigationConstants.proximityThresholdM &&
-          !_isNavigationComplete) {
-        _isNavigationComplete = true;
-        _onNavigationComplete();
       }
 
-      // 남은 거리 계산 최적화 - 캐싱 사용
-      double remainingRouteDistance = 0.0;
-      
+      // 남은 거리 계산 (캐싱)
+      double remainingRouteDistance;
       if (cachedRemainingDistance == null || nextPointIndex != _lastCachedPointIndex) {
-        // 캐시가 없거나 포인트가 변경된 경우에만 재계산
-        if (nextPointIndex < widget.routePoints.length) {
-          // 다음 포인트부터 끝까지의 거리 (한 번만 계산하고 캐시)
-          for (int i = nextPointIndex; i < widget.routePoints.length - 1; i++) {
-            remainingRouteDistance += calculateDistance(
-              widget.routePoints[i], 
-              widget.routePoints[i + 1]
-            );
-          }
-          cachedRemainingDistance = remainingRouteDistance;
-          _lastCachedPointIndex = nextPointIndex;
+        remainingRouteDistance = 0.0;
+        for (int i = nextPointIndex; i < widget.routePoints.length - 1; i++) {
+          remainingRouteDistance += calculateDistance(
+            widget.routePoints[i], 
+            widget.routePoints[i + 1]
+          );
         }
+        cachedRemainingDistance = remainingRouteDistance;
+        _lastCachedPointIndex = nextPointIndex;
       } else {
         remainingRouteDistance = cachedRemainingDistance!;
       }
       
-      // 현재 위치에서 다음 포인트까지의 거리 추가
-      if (nextPointIndex < widget.routePoints.length) {
-        remainingRouteDistance += distanceToNext;
-      }
+      remainingRouteDistance += distanceToNext;
 
-      // 상태 업데이트 - 변화가 있을 때만
+      // 상태 업데이트 (변경사항 있을 때만)
       final newRemainingTimeMin = (remainingRouteDistance / NavigationConstants.walkingSpeedMPerMin).ceil();
-      if ((remainingDistance - remainingRouteDistance).abs() > NavigationConstants.distanceUpdateThresholdM || // 5m 이상 차이날 때만
-          remainingTimeMin != newRemainingTimeMin) {
+      if ((remainingDistance - remainingRouteDistance).abs() > 1.0 || remainingTimeMin != newRemainingTimeMin) {
+        if (widget.totalDistanceM != null) {
+          completedDistance = widget.totalDistanceM! - remainingRouteDistance;
+        }
+        
         if (mounted) {
           setState(() {
             remainingDistance = remainingRouteDistance;
@@ -500,16 +498,19 @@ class _NavigationScreenState extends State<NavigationScreen> {
         }
       }
 
-      double distanceToRoute = getMinDistanceToPolyline(current, widget.routePoints);
-      if (distanceToRoute > NavigationConstants.offRouteThresholdM) {
-        // TTS 빈도 제한
-        if (lastTtsAnnouncement == null ||
-            now.difference(lastTtsAnnouncement!).inMilliseconds >= NavigationConstants.ttsIntervalMs) {
-          try {
-            await flutterTts.speak("경로를 벗어났습니다. 경로를 다시 확인하세요.");
+      // 경로 이탈 확인 (최적화: 가장 가까운 구간만 확인)
+      if (nextPointIndex > 0) {
+        final distToSegment = distanceToSegment(
+          current, 
+          widget.routePoints[nextPointIndex - 1], 
+          widget.routePoints[nextPointIndex]
+        );
+        
+        if (distToSegment > NavigationConstants.offRouteThresholdM) {
+          if (lastTtsAnnouncement == null ||
+              now.difference(lastTtsAnnouncement!).inMilliseconds >= NavigationConstants.ttsIntervalMs) {
+            flutterTts.speak("경로를 벗어났습니다");
             lastTtsAnnouncement = now;
-          } catch (e) {
-            print('TTS 오류: $e');
           }
         }
       }
@@ -517,81 +518,52 @@ class _NavigationScreenState extends State<NavigationScreen> {
       print('경로 근접성 확인 중 오류: $e');
     }
   }
-  
-  int? _lastCachedPointIndex;
 
   void updateRemainingRoute() {
-    // 현재 위치에서 남은 경로만 추출
-    if (nextPointIndex < widget.routePoints.length) {
-      List<LatLng> remainingRoutePoints = [];
-      List<LatLng> completedRoutePoints = [];
-      
-      // 지나간 경로 (처음부터 현재 포인트까지)
-      if (nextPointIndex > 0) {
-        completedRoutePoints.addAll(
-          widget.routePoints.sublist(0, nextPointIndex + 1)
-        );
-      }
-      
-      // 현재 위치 추가 (선택사항)
-      if (currentLocation != null) {
-        remainingRoutePoints.add(
-          LatLng(currentLocation!.latitude!, currentLocation!.longitude!)
-        );
-      }
-      
-      // 다음 포인트부터 끝까지 추가
-      remainingRoutePoints.addAll(
-        widget.routePoints.sublist(nextPointIndex)
+    if (nextPointIndex >= widget.routePoints.length || currentLocation == null) return;
+
+    final newPolylines = <Polyline>{};
+    final currentPos = LatLng(currentLocation!.latitude!, currentLocation!.longitude!);
+    
+    // 1. 완료된 경로 (회색)
+    if (nextPointIndex > 1) {
+      newPolylines.add(
+        Polyline(
+          polylineId: const PolylineId('completed'),
+          points: widget.routePoints.sublist(0, nextPointIndex),
+          color: Colors.grey.withOpacity(0.5),
+          width: 3,
+        ),
       );
-
-      // 폴리라인 업데이트 - 상태가 실제로 변경된 경우에만
-      final newPolylines = <Polyline>{};
-      
-      // 지나간 경로 (흐린 회색으로 표시)
-      if (completedRoutePoints.length >= 2) {
-        newPolylines.add(
-          Polyline(
-            polylineId: const PolylineId('completed_route'),
-            points: completedRoutePoints,
-            color: Colors.grey.withOpacity(0.5),
-            width: 3,
-          ),
-        );
-      }
-      
-      // 남은 경로 (파란색으로 강조 표시)
-      if (remainingRoutePoints.length >= 2) {
-        newPolylines.add(
-          Polyline(
-            polylineId: const PolylineId('remaining_route'),
-            points: remainingRoutePoints,
-            color: Colors.blue,
-            width: 5,
-          ),
-        );
-      }
-
-      // 실제로 변경사항이 있을 때만 setState 호출
-      if (newPolylines.length != polylines.length || 
-          !_polylinesEqual(newPolylines, polylines)) {
-        if (mounted) {
-          setState(() {
-            polylines = newPolylines;
-          });
-        }
-      }
     }
-  }
-  
-  // 폴리라인 세트가 같은지 확인하는 헬퍼 메서드
-  bool _polylinesEqual(Set<Polyline> set1, Set<Polyline> set2) {
-    if (set1.length != set2.length) return false;
-    for (final polyline in set1) {
-      final matching = set2.where((p) => p.polylineId == polyline.polylineId);
-      if (matching.isEmpty) return false;
+    
+    // 2. 다음 구간 (초록색)
+    newPolylines.add(
+      Polyline(
+        polylineId: const PolylineId('next'),
+        points: [currentPos, widget.routePoints[nextPointIndex]],
+        color: Colors.green,
+        width: 6,
+      ),
+    );
+    
+    // 3. 남은 경로 (파란색)
+    if (nextPointIndex + 1 < widget.routePoints.length) {
+      newPolylines.add(
+        Polyline(
+          polylineId: const PolylineId('remaining'),
+          points: widget.routePoints.sublist(nextPointIndex),
+          color: Colors.blue,
+          width: 5,
+        ),
+      );
     }
-    return true;
+
+    if (mounted) {
+      setState(() {
+        polylines = newPolylines;
+      });
+    }
   }
 
   double calculateDistance(LatLng p1, LatLng p2) {
@@ -611,14 +583,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
   double radians(double deg) => deg * pi / 180;
   double degrees(double rad) => rad * 180 / pi;
 
-  double getMinDistanceToPolyline(LatLng p, List<LatLng> route) {
-    double minDist = double.infinity;
-    for (int i = 0; i < route.length - 1; i++) {
-      double d = distanceToSegment(p, route[i], route[i + 1]);
-      if (d < minDist) minDist = d;
-    }
-    return minDist;
-  }
+  // 최적화: 전체 경로가 아닌 주변 구간만 확인하도록 제거
+  // distanceToSegment만 사용
 
   double distanceToSegment(LatLng p, LatLng v, LatLng w) {
     double lat = radians(p.latitude);
@@ -667,6 +633,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   static List<LatLng>? getSavedRoutePoints() => savedRoutePoints;
   static int? getSavedTotalDistanceM() => savedTotalDistanceM;
   static int? getSavedTotalTimeMin() => savedTotalTimeMin;
+  static int? getSavedPloggingPoints() => savedPloggingPoints;
   
   // 저장된 데이터 확인 함수
   static void printSavedNavigationData() {
@@ -675,6 +642,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
     print('경과 시간: ${getSavedElapsedTime()?.toString() ?? "저장되지 않음"}');
     print('전체 거리: ${getSavedTotalDistanceM() != null ? (getSavedTotalDistanceM()! / 1000).toStringAsFixed(2) : "N/A"} km');
     print('경로 포인트 수: ${getSavedRoutePoints()?.length ?? 0}');
+    print('플로깅 포인트: ${getSavedPloggingPoints() ?? 0}');
     print('================================');
   }
   
@@ -790,7 +758,7 @@ class _ProgressPanel extends StatelessWidget {
                   _buildInfoColumn(
                     icon: Icons.flag,
                     iconColor: Colors.orange,
-                    value: '${((totalDistanceM! - remainingDistance) / totalDistanceM! * 100).toStringAsFixed(0)}%',
+                    value: '${(((totalDistanceM! - remainingDistance) / totalDistanceM! * 100).clamp(0, 100)).toStringAsFixed(0)}%',
                     label: '진행률',
                   ),
               ],
@@ -798,7 +766,7 @@ class _ProgressPanel extends StatelessWidget {
             if (totalDistanceM != null) ...[
               const SizedBox(height: 12),
               LinearProgressIndicator(
-                value: (totalDistanceM! - remainingDistance) / totalDistanceM!,
+                value: ((totalDistanceM! - remainingDistance) / totalDistanceM!).clamp(0.0, 1.0),
                 backgroundColor: Colors.grey[300],
                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
               ),
