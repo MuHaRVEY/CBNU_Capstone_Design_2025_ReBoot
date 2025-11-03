@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
+import 'package:provider/provider.dart';
+import 'package:capstonedesign/Game/coin_provider.dart';
 
 class AdventurePage extends StatefulWidget {
   final int petState;
-  const AdventurePage({Key? key, required this.petState}) : super(key: key);
+  final bool autoStart; // 플로깅 진입이면 true
+
+  const AdventurePage({
+    Key? key,
+    required this.petState,
+    this.autoStart = false,
+  }) : super(key: key);
 
   @override
   _AdventurePageState createState() => _AdventurePageState();
@@ -15,17 +23,20 @@ class _AdventurePageState extends State<AdventurePage> {
   bool inBattle = false;
   int playerHp = 3;
   int monsterHp = 3;
+
+  // FIGHT2
   List<String> trashList = [];
   List<Widget> trashWidgets = [];
-  String? binTag = 'general';
-  bool binDropped = false;
+
+  // 공통
   late String petImagePath;
   bool isMonsterAttacked = false;
-  bool showDamageEffect = false; // 이펙트용 벼눗
+  bool showDamageEffect = false;
   double effectPosX = 0;
   double effectPosY = 0;
   final random = Random();
 
+  // FIGHT3
   List<String> memorySequence = [];
   List<String> memoryOptions = [];
   int memoryCurrentIndex = 0;
@@ -35,6 +46,50 @@ class _AdventurePageState extends State<AdventurePage> {
   void initState() {
     super.initState();
     petImagePath = _getPetImage(widget.petState);
+
+    // 플로깅에서 진입 시 자동으로 전투 시작 + 랜덤 미니게임 1개
+    if (widget.autoStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startRandomChallenge();
+      });
+    }
+  }
+
+  // --------- 공용 종료/보상 ----------
+  void _finishBattle({required bool win}) {
+    final entry = widget.autoStart ? 'plogging' : 'game';
+
+    // 코인 지급: 플로깅 성공 10 / 게임(HP 0까지 격파) 성공 30
+    if (win) {
+      final reward = (entry == 'plogging') ? 10 : 30;
+      try {
+        context.read<CoinProvider>().addCoins(reward);
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      Navigator.pop(context, {
+        'entry': entry, // 'plogging' | 'game'
+        'win': win,     // true | false
+      });
+    }
+  }
+  // -----------------------------------
+
+  // 랜덤 미니게임 바로 시작(플로깅용)
+  void _startRandomChallenge() {
+    setState(() => inBattle = true);
+    switch (Random().nextInt(3)) {
+      case 0:
+        startTapChallenge();
+        break;
+      case 1:
+        startTrashDropChallenge();
+        break;
+      case 2:
+        startMemoryChallenge();
+        break;
+    }
   }
 
   String _getPetImage(int state) {
@@ -52,154 +107,140 @@ class _AdventurePageState extends State<AdventurePage> {
     setState(() {
       isMonsterAttacked = true;
       showDamageEffect = true;
-      effectPosX = random.nextDouble() * 50 - 25; // -25 ~ 25 사이 랜덤 X 위치
-      effectPosY = random.nextDouble() * 50 - 25; // -25 ~ 25 사이 랜덤 Y 위치
+      effectPosX = random.nextDouble() * 50 - 25;
+      effectPosY = random.nextDouble() * 50 - 25;
     });
-
-    Timer(Duration(milliseconds: 1500), () {
-      if (mounted) {
-        setState(() {
-          isMonsterAttacked = false;
-          showDamageEffect = false;
-        });
-      }
-    });
-  }
-
-
-  void startBattle() {
-    setState(() {
-      inBattle = true;
-    });
-  }
-
-  void endBattle() {
-    setState(() {
-      inBattle = false;
-      hasMonster = false;
-    });
-  }
-
-  void startMemoryChallenge() {
-    final random = Random();
-    final available = List.generate(10, (index) => 'assets/images/t${index + 1}.png');
-    available.shuffle();
-
-    memorySequence = available.take(4).toList();
-    memoryOptions = List.from(memorySequence)..addAll(available.skip(4).take(4));
-    memoryOptions.shuffle();
-    memoryCurrentIndex = 0;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('쓰레기 기억해!'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: memorySequence.map((path) => Image.asset(path, width: 60)).toList(),
-        ),
-      ),
-    );
-
-    Timer(Duration(seconds: 3), () {
-      Navigator.pop(context);
+    Timer(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
       setState(() {
-        showMemoryChallengeUIFlag = true;
+        isMonsterAttacked = false;
+        showDamageEffect = false;
       });
     });
   }
 
+  void startBattle() => setState(() => inBattle = true);
+
+  void endBattle() {
+    // 도망 → 무조건 패배 종료
+    setState(() {
+      inBattle = false;
+      hasMonster = false;
+    });
+    _finishBattle(win: false);
+  }
+
+  // ----------------- FIGHT3: 기억 게임 -----------------
+  void startMemoryChallenge() {
+    final available = List.generate(10, (i) => 'assets/images/t${i + 1}.png')..shuffle();
+    memorySequence = available.take(4).toList();
+    memoryOptions = [...memorySequence, ...available.skip(4).take(4)]..shuffle();
+    memoryCurrentIndex = 0;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text('쓰레기 기억해!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: memorySequence.map((p) => Image.asset(p, width: 60)).toList(),
+        ),
+      ),
+    );
+
+    Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      Navigator.pop(context); // preview 닫기
+      setState(() => showMemoryChallengeUIFlag = true);
+    });
+  }
+
+  // ----------------- FIGHT2: 드래그-드롭 -----------------
   void startTrashDropChallenge() {
-    final random = Random();
-    final available = List.generate(10, (index) => 'assets/images/t${index + 1}.png');
-    available.shuffle();
+    final available = List.generate(10, (i) => 'assets/images/t${i + 1}.png')..shuffle();
     final selected = available.take(3).toList();
     final screenWidth = MediaQuery.of(context).size.width;
 
     trashList = List.from(selected);
-    List<Widget> generated = [];
+    final generated = <Widget>[];
 
     for (var path in selected) {
-      final left = random.nextDouble() * (screenWidth - 60);
+      final left = Random().nextDouble() * (screenWidth - 60);
       generated.add(_createAnimatedTrash(path, left));
     }
-
     generated.add(_createAnimatedBin((screenWidth - 100) / 2));
 
-    setState(() {
-      trashWidgets = generated;
-    });
+    setState(() => trashWidgets = generated);
   }
 
   Widget _createAnimatedTrash(String path, double left) {
-    return TweenAnimationBuilder(
-      tween: Tween<double>(begin: -100, end: 350),
-      duration: Duration(milliseconds: 800),
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: -100, end: 350),
+      duration: const Duration(milliseconds: 800),
       curve: Curves.easeInOut,
-      builder: (context, value, child) {
-        return Positioned(
-          top: value,
-          left: left,
-          child: child!,
-        );
-      },
+      builder: (_, value, child) => Positioned(top: value, left: left, child: child!),
       child: Draggable<String>(
         data: path,
         feedback: Image.asset(path, width: 60),
-        childWhenDragging: SizedBox.shrink(),
+        childWhenDragging: const SizedBox.shrink(),
         child: Image.asset(path, width: 60),
       ),
     );
   }
 
-
   Widget _createAnimatedBin(double left) {
-    return TweenAnimationBuilder(
-      tween: Tween<double>(begin: -120, end: 380),
-      duration: Duration(milliseconds: 800),
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: -120, end: 380),
+      duration: const Duration(milliseconds: 800),
       curve: Curves.easeInOut,
-      builder: (context, value, child) {
+      builder: (_, value, child) {
         return Positioned(
           top: value,
           left: left,
           child: DragTarget<String>(
-            onWillAccept: (data) => true,
+            onWillAccept: (_) => true,
             onAccept: (data) {
               setState(() {
                 trashList.remove(data);
                 final screenWidth = MediaQuery.of(context).size.width;
-                List<Widget> updated = [];
-
-                for (var path in trashList) {
-                  final left = Random().nextDouble() * (screenWidth - 60);
-                  updated.add(_createAnimatedTrash(path, left));
+                final updated = <Widget>[];
+                for (var p in trashList) {
+                  final l = Random().nextDouble() * (screenWidth - 60);
+                  updated.add(_createAnimatedTrash(p, l));
                 }
-
-                // FIGHT2가 끝나도 안 사라지길래 IF문으로 추가하여 넣었음
                 if (trashList.isNotEmpty) {
                   updated.add(_createAnimatedBin((screenWidth - 100) / 2));
                 }
                 trashWidgets = updated;
 
                 if (trashList.isEmpty) {
-                  monsterHp = (monsterHp - 1).clamp(0, 3);
-                  showMonsterAttackedEffect();
-                  if (monsterHp <= 0) {
-                    hasMonster = false;
-                    inBattle = false;
+                  // 성공 판정
+                  if (widget.autoStart) {
+                    // 플로깅: 즉시 종료(성공)
+                    showMonsterAttackedEffect();
+                    _finishBattle(win: true);
+                  } else {
+                    // 게임: HP 1 깎고, 0이면 클리어
+                    monsterHp = (monsterHp - 1).clamp(0, 3);
+                    showMonsterAttackedEffect();
+                    if (monsterHp <= 0) {
+                      hasMonster = false;
+                      inBattle = false;
+                      _finishBattle(win: true);
+                    }
                   }
                 }
               });
             },
-            builder: (context, candidateData, rejectedData) {
-              return Image.asset('assets/images/trashbin.png', width: 100);
-            },
+            builder: (_, __, ___) => Image.asset('assets/images/trashbin.png', width: 100),
           ),
         );
       },
     );
   }
 
+  // ----------------- FIGHT1: 3초 연타 -----------------
   void startTapChallenge() {
     int tapCount = 0;
     bool challengeEnded = false;
@@ -207,64 +248,75 @@ class _AdventurePageState extends State<AdventurePage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
-        Timer(Duration(seconds: 3), () {
-          if (!challengeEnded) {
-            challengeEnded = true;
-            Navigator.pop(context);
-            resolveTapChallenge(tapCount);
-          }
+      builder: (_) {
+        Timer(const Duration(seconds: 3), () {
+          if (challengeEnded) return;
+          challengeEnded = true;
+          Navigator.pop(context);
+          _resolveTapChallenge(tapCount);
         });
 
         return AlertDialog(
-          title: Text('빠르게 눌러라!'),
+          title: const Text('빠르게 눌러라!'),
           content: StatefulBuilder(
-            builder: (context, setState) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('3초 안에 15번 눌러야 합니다!'),
-                  Text('현재: $tapCount'),
-                  SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        tapCount++;
-                      });
-                      showMonsterAttackedEffect();
-                    },
-                    child: Text('눌러!'),
-                  ),
-                ],
-              );
-            },
+            builder: (_, setSt) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('3초 안에 15번 눌러야 합니다!'),
+                Text('현재: $tapCount'),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: () {
+                    setSt(() => tapCount++);
+                    showMonsterAttackedEffect();
+                  },
+                  child: const Text('눌러!'),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  void resolveTapChallenge(int tapCount) {
+  void _resolveTapChallenge(int tapCount) {
+    final success = tapCount >= 15;
+
+    if (widget.autoStart) {
+      // 플로깅: 즉시 끝
+      if (success) showMonsterAttackedEffect();
+      _finishBattle(win: success);
+      return;
+    }
+
+    // 게임 모드: HP/플레이어 HP 반영
     setState(() {
-      if (tapCount >= 15) {
+      if (success) {
         monsterHp = (monsterHp - 1).clamp(0, 3);
         showMonsterAttackedEffect();
       } else {
         playerHp = (playerHp - 1).clamp(0, 3);
       }
 
-      if (monsterHp <= 0 || playerHp <= 0) {
+      if (monsterHp <= 0) {
         inBattle = false;
         hasMonster = false;
+        _finishBattle(win: true);
+      } else if (playerHp <= 0) {
+        inBattle = false;
+        hasMonster = false;
+        _finishBattle(win: false);
       }
     });
   }
 
+  // ----------------- 공용 UI -----------------
   Widget buildHpBar(double hp, {required String label}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontWeight: FontWeight.bold)),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
         Container(
           width: 120,
           height: 10,
@@ -288,15 +340,16 @@ class _AdventurePageState extends State<AdventurePage> {
   }
 
   Widget buildMonsterEncounter() {
+    // autoStart=false에서만 이 화면이 보임
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset('assets/images/trash_monster.png', width: 200, height: 200),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           ElevatedButton(
             onPressed: startBattle,
-            child: Text('배틀 시작'),
+            child: const Text('배틀 시작'),
           ),
         ],
       ),
@@ -309,10 +362,7 @@ class _AdventurePageState extends State<AdventurePage> {
     return Stack(
       children: [
         Positioned.fill(
-          child: Image.asset(
-            'assets/images/battle_background.png',
-            fit: BoxFit.cover,
-          ),
+          child: Image.asset('assets/images/battle_background.png', fit: BoxFit.cover),
         ),
         Positioned(
           top: 30,
@@ -321,41 +371,27 @@ class _AdventurePageState extends State<AdventurePage> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               buildHpBar(monsterHp / 3, label: '쓰레기 몬스터'),
-              SizedBox(height: 10),
+              const SizedBox(height: 10),
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  Image.asset(
-                    'assets/images/trash_monster.png',
-                    width: 140,
-                    height: 140,
-                  ),
+                  Image.asset('assets/images/trash_monster.png', width: 140, height: 140),
                   if (isMonsterAttacked)
                     Positioned(
                       top: 0,
                       left: 0,
-                      child: Image.asset(
-                        'assets/images/trash_monster_attacked.png',
-                        width: 140,
-                        height: 140,
-                      ),
+                      child: Image.asset('assets/images/trash_monster_attacked.png', width: 140, height: 140),
                     ),
                   if (showDamageEffect)
                     AnimatedPositioned(
-                      duration: Duration(milliseconds: 300),
+                      duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
                       top: 50 + effectPosY,
                       left: 50 + effectPosX,
-                      child: Image.asset(
-                        'assets/images/damage_effect.png',
-                        width: 60, // 이펙트 크기 줄임
-                        height: 60,
-                      ),
+                      child: Image.asset('assets/images/damage_effect.png', width: 60, height: 60),
                     ),
                 ],
               ),
-
-
             ],
           ),
         ),
@@ -366,15 +402,13 @@ class _AdventurePageState extends State<AdventurePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               buildHpBar(playerHp / 3, label: '내 강아지'),
-              SizedBox(height: 10),
-              Image.asset(
-                petImagePath,
-                width: 160,
-                height: 160,
-              ),
+              const SizedBox(height: 10),
+              Image.asset(petImagePath, width: 160, height: 160),
             ],
           ),
         ),
+
+        // FIGHT3 UI
         if (showMemoryChallengeUIFlag) ...[
           Positioned(
             bottom: 220,
@@ -384,83 +418,100 @@ class _AdventurePageState extends State<AdventurePage> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Wrap(
                 spacing: 12,
-                runSpacing: 8, // 줄 간격
-                alignment: WrapAlignment.center, // 가운데 정렬
-                children: memoryOptions.map((path) {
-                  return Draggable<String>(
-                    data: path,
-                    feedback: Image.asset(path, width: 60),
-                    childWhenDragging: Opacity(opacity: 0.3, child: Image.asset(path, width: 60)),
-                    child: Image.asset(path, width: 60),
-                  );
-                }).toList(),
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: memoryOptions
+                    .map((path) => Draggable<String>(
+                  data: path,
+                  feedback: Image.asset(path, width: 60),
+                  childWhenDragging: Opacity(opacity: 0.3, child: Image.asset(path, width: 60)),
+                  child: Image.asset(path, width: 60),
+                ))
+                    .toList(),
               ),
             ),
           ),
-
           Positioned(
             bottom: 140,
             left: screenWidth / 2 - 50,
             child: DragTarget<String>(
-              onWillAccept: (data) => true,
+              onWillAccept: (_) => true,
               onAccept: (data) {
                 if (data == memorySequence[memoryCurrentIndex]) {
                   setState(() {
                     memoryOptions.remove(data);
                     memoryCurrentIndex++;
+                  });
 
-                    if (memoryCurrentIndex >= memorySequence.length) {
-                      monsterHp = (monsterHp - 1).clamp(0, 3);
-                      showMemoryChallengeUIFlag = false;
+                  if (memoryCurrentIndex >= memorySequence.length) {
+                    // 성공
+                    if (widget.autoStart) {
                       showMonsterAttackedEffect();
+                      _finishBattle(win: true);
+                    } else {
+                      setState(() {
+                        monsterHp = (monsterHp - 1).clamp(0, 3);
+                        showMonsterAttackedEffect();
+                        if (monsterHp <= 0) {
+                          hasMonster = false;
+                          inBattle = false;
+                          _finishBattle(win: true);
+                        }
+                      });
                     }
-                  });
+                  }
                 } else {
-                  setState(() {
-                    playerHp = (playerHp - 1).clamp(0, 3);
-                    showMemoryChallengeUIFlag = false;
-                  });
-                }
-
-                if (monsterHp <= 0 || playerHp <= 0) {
-                  setState(() {
-                    hasMonster = false;
-                    inBattle = false;
-                  });
+                  // 실패
+                  if (widget.autoStart) {
+                    setState(() => showMemoryChallengeUIFlag = false);
+                    _finishBattle(win: false);
+                  } else {
+                    setState(() {
+                      playerHp = (playerHp - 1).clamp(0, 3);
+                      showMemoryChallengeUIFlag = false;
+                      if (playerHp <= 0) {
+                        hasMonster = false;
+                        inBattle = false;
+                        _finishBattle(win: false);
+                      }
+                    });
+                  }
                 }
               },
-              builder: (context, candidateData, rejectedData) {
-                return Image.asset('assets/images/trashbin.png', width: 100);
-              },
+              builder: (_, __, ___) => Image.asset('assets/images/trashbin.png', width: 100),
             ),
           ),
         ],
-        Align(
-          alignment: Alignment.bottomCenter,
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton(onPressed: startTapChallenge, child: Text('FIGHT1')),
-                    ElevatedButton(onPressed: startTrashDropChallenge, child: Text('FIGHT2')),
-                    ElevatedButton(onPressed: startMemoryChallenge, child: Text('FIGHT3')),
-                  ],
-                ),
-                SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton(onPressed: endBattle, child: Text('RUN')),
-                  ],
-                ),
-              ],
+
+        // 수동 모드에서만(게임 탭) 하단 버튼 표시
+        if (!widget.autoStart)
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton(onPressed: startTapChallenge, child: const Text('FIGHT1')),
+                      ElevatedButton(onPressed: startTrashDropChallenge, child: const Text('FIGHT2')),
+                      ElevatedButton(onPressed: startMemoryChallenge, child: const Text('FIGHT3')),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton(onPressed: endBattle, child: const Text('RUN')),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
+
         ...trashWidgets,
       ],
     );
@@ -469,12 +520,12 @@ class _AdventurePageState extends State<AdventurePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('모험')),
+      appBar: AppBar(title: const Text('모험')),
       body: hasMonster
-          ? inBattle
+          ? (widget.autoStart || inBattle) // autoStart면 바로 전투 화면
           ? buildBattleView()
           : buildMonsterEncounter()
-          : Center(child: Text('주변에 몬스터가 없습니다.')),
+          : const Center(child: Text('주변에 몬스터가 없습니다.')),
     );
   }
 }
