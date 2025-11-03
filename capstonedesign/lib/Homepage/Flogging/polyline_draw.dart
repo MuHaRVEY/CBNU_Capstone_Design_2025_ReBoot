@@ -64,7 +64,9 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
   String? _toastText;
   Timer? _toastTimer;
   bool _monsterDisabled = false; // 성공 후 다시는 등장하지 않게
-
+  
+  final TextEditingController savedRouteNameController = TextEditingController(text: '나의 경로'); // 경로 이름 입력 컨트롤러
+  
   @override
   void initState() {
     super.initState();
@@ -350,6 +352,14 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    if (saveRoute && !_isSaved)
+                      TextField(
+                        controller: savedRouteNameController,
+                        decoration: InputDecoration(
+                          labelText: '경로 이름',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
                 ],
               ),
               actions: [
@@ -384,6 +394,7 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                         isNavigation: false,
                         encodedRoute: routeToSave,
                         pointCount: pointsToSave,
+                        nameRoute: savedRouteNameController.text,
                       );
 
                       // ===== [추가] 저장 직후 플로깅 전투(자동시작) 진입
@@ -436,9 +447,9 @@ class _LivePolylineMapScreen extends State<LivePolylineMapScreen> {
                       );
 
                       // ✅ 저장 후 다이얼로그 닫고 CameraPage로 이동
-                      if (mounted) {
+                      /* if (mounted) {
                         Navigator.of(context).pop();
-                      }
+                      } */
                     },
                     icon: const Icon(Icons.save),
                     label: const Text('저장'),
