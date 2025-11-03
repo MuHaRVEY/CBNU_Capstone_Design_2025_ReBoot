@@ -1,6 +1,11 @@
+import 'package:capstonedesign/Homepage/Flogging/polyline_draw.dart';
+import 'package:capstonedesign/Homepage/Flogging/navigator.dart';
+import 'package:capstonedesign/Homepage/static_map_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:intl/intl.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 
 class CommunityDetailPage extends StatefulWidget {
   final String postId;
@@ -303,6 +308,71 @@ class _CommunityDetailPageState extends State<CommunityDetailPage> {
                   const SizedBox(height: 16),
                   Text(postData!['content'] ?? '',
                       style: const TextStyle(fontSize: 15, height: 1.5)),
+                  if(postData?['route'] != null)
+                    ExpansionTile(title: const Text('경로 보기'),
+                    tilePadding: EdgeInsets.zero,
+                    children: [
+                      StaticMapWidget(encoded: postData!['route']['encoded']),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          ElevatedButton(onPressed: () {}, child: const Text('저장 하기')),
+                          ElevatedButton(
+                            onPressed: () {
+                              try {
+                                // 인코딩된 폴리라인을 디코딩
+                                String encodedPolyline = postData!['route']['encoded'] as String;
+                                PolylinePoints polylinePoints = PolylinePoints();
+                                List<PointLatLng> result = polylinePoints.decodePolyline(encodedPolyline);
+                                
+                                if (result.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('경로 데이터가 유효하지 않습니다.')),
+                                  );
+                                  return;
+                                }
+                                
+                                // LatLng 리스트로 변환
+                                List<LatLng> routePoints = result
+                                    .map((point) => LatLng(point.latitude, point.longitude))
+                                    .toList();
+
+                                // 경로의 총 거리와 예상 시간 (route에 저장되어 있다면 사용)
+                                int? totalDistanceM;
+                                int? totalTimeMin;
+                                
+                                if (postData!['route']['distanceM'] != null) {
+                                  totalDistanceM = postData!['route']['distanceM'].toInt();
+                                }
+                                if (postData!['route']['Duration'] != null) {
+                                  totalTimeMin = (postData!['route']['Duration'] / 60) < 0 ? 1 : (postData!['route']['Duration'] / 60).toInt();
+                                }
+
+                                // NavigationScreen으로 이동
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => NavigationScreen(
+                                      routePoints: routePoints,
+                                      totalDistanceM: totalDistanceM,
+                                      totalTimeMin: totalTimeMin,
+                                      userId: widget.userId,
+                                    ),
+                                  ),
+                                );
+                              } catch (e) {
+                                print('경로 로드 중 오류 발생: $e');
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('경로를 불러오는 중 오류가 발생했습니다: $e')),
+                                );
+                              }
+                            },
+                            child: const Text('플로깅 하기'),
+                          ),
+                        ],
+                      )
+                    ],
+                    ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
