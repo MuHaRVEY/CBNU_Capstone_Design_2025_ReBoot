@@ -1,8 +1,11 @@
-import 'package:capstonedesign/Homepage/static_map_widget.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:capstonedesign/Homepage/static_map_widget.dart';
 
 class CommunityNewThingsPage extends StatefulWidget {
   final String userId;
@@ -22,22 +25,30 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
   final _dbRef = FirebaseDatabase.instance.ref();
+  final _storageRef = FirebaseStorage.instance.ref();
+  final ImagePicker _picker = ImagePicker();
 
+  File? _selectedImage;
   List<Map<String, dynamic>> _savedRoutes = [];
   Map<String, dynamic>? _selectedRoute;
   bool _loadingRoutes = true;
 
+  // 지역 선택
+  String? _selectedRegion;
+  final List<String> _regions = [
+    '서울', '경기', '인천', '강원', '충북', '충남',
+    '전북', '전남', '경북', '경남', '부산', '대구', '광주', '울산', '제주'
+  ];
+
   @override
   void initState() {
     super.initState();
-    print("🟢 CommunityNewThingsPage initState()");
     _loadSavedRoutes();
   }
 
-  /// ✅ users/{userId}/polylineHistory에서 경로 불러오기
+  /// users/{userId}/polylineHistory에서 경로 불러오기
   Future<void> _loadSavedRoutes() async {
     print("🔍 Firebase에서 경로 불러오기 시작: users/${widget.userId}/polylineHistory");
-
     try {
       final snapshot =
           await _dbRef.child('users/${widget.userId}/polylineHistory').get();
@@ -51,22 +62,13 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
         return;
       }
 
-      print("✅ Firebase 데이터 수신 완료: ${snapshot.children.length}개의 경로 발견됨");
-
       final data = Map<String, dynamic>.from(snapshot.value as Map);
       final routes = data.values
           .where((v) => v['encodedRoute'] != null)
           .map((v) => Map<String, dynamic>.from(v))
           .toList();
 
-      print("📦 변환 완료: 총 ${routes.length}개의 경로 변환됨");
-
-      // 날짜 기준 정렬
       routes.sort((a, b) => b['date'].compareTo(a['date']));
-
-      for (var r in routes) {
-        print("🗺 경로 이름: ${r['nameRoute']} | 거리: ${r['distance']} | time: ${r['time']} | encodedRoute 길이: ${r['encodedRoute']?.length}");
-      }
 
       setState(() {
         _savedRoutes = routes;
@@ -81,38 +83,73 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
     }
   }
 
-  /// ✅ 게시글 업로드
+  /// 이미지 선택
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picked = await _picker.pickImage(source: source, imageQuality: 80);
+      if (picked == null) return;
+      setState(() {
+        _selectedImage = File(picked.path);
+      });
+      print("📸 이미지 선택 완료: ${picked.path}");
+    } catch (e) {
+      print("🚨 이미지 선택 오류: $e");
+    }
+  }
+
+  /// Firebase Storage 업로드
+  Future<String?> _uploadImageToStorage(File image) async {
+    try {
+      final imageRef = _storageRef
+          .child('community_images')
+          .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+      print("☁️ 이미지 업로드 중: ${imageRef.fullPath}");
+      await imageRef.putFile(image);
+      final downloadUrl = await imageRef.getDownloadURL();
+      print("✅ 이미지 업로드 완료: $downloadUrl");
+      return downloadUrl;
+    } catch (e) {
+      print("🚨 이미지 업로드 실패: $e");
+      return null;
+    }
+  }
+
+  /// 게시글 업로드 
   Future<void> _uploadPost() async {
     print("🚀 게시글 업로드 시작");
 
-    if (_titleController.text.isEmpty || _contentController.text.isEmpty) {
-      print("⚠️ 제목 또는 내용이 비어 있음");
-      if (!mounted) return;
+    if (_titleController.text.isEmpty ||
+        _contentController.text.isEmpty ||
+        _selectedRegion == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('제목과 내용을 입력해주세요.')),
+        const SnackBar(content: Text('제목, 내용, 지역을 모두 입력해주세요.')),
       );
       return;
     }
 
-    print("🧾 제목: ${_titleController.text.trim()}");
-    print("🧾 내용: ${_contentController.text.trim()}");
-    print("👤 작성자: ${widget.nickname} (${widget.userId})");
-    if (_selectedRoute != null) {
-      print("📍 선택된 경로: ${_selectedRoute!['nameRoute']} (${_selectedRoute!['distance']} m)");
-    } else {
-      print("📍 선택된 경로 없음");
+    String? imageUrl;
+    if (_selectedImage != null) {
+      imageUrl = await _uploadImageToStorage(_selectedImage!);
+      if (imageUrl == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('이미지 업로드 실패')),
+        );
+        return;
+      }
     }
 
     try {
       final newPostRef = _dbRef.child('community_posts').push();
-      print("🪶 새 게시글 ID: ${newPostRef.key}");
-
       await newPostRef.set({
         'title': _titleController.text.trim(),
         'content': _contentController.text.trim(),
         'nickname': widget.nickname,
         'userId': widget.userId,
+        'region': _selectedRegion,
         'createdAt': DateTime.now().toIso8601String(),
+        'imageUrl': imageUrl,
+        'likeCount': 0,
+        'likedUsers': {},
         'route': _selectedRoute != null
             ? {
                 'name': _selectedRoute!['nameRoute'],
@@ -123,37 +160,28 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
             : null,
       });
 
-      print("✅ 게시글 업로드 성공");
-
-      if (!mounted) return;
+      print(" 게시글 업로드 성공");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('게시글이 업로드되었습니다!')),
       );
 
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          print("🔙 페이지 닫기 (Navigator.pop)");
-          Navigator.pop(context);
-        }
+        if (mounted) Navigator.pop(context);
       });
     } catch (e) {
-      print("🚨 게시글 업로드 중 오류: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('업로드 실패: $e')),
-        );
-      }
+      print(" 게시글 업로드 중 오류: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('업로드 실패: $e')),
+      );
     }
   }
 
-  /// ✅ Polyline 디코딩
+  /// Polyline 디코딩
   List<LatLng> _decodePolyline(String encoded) {
-    print("🧩 Polyline 디코딩 시작 (길이: ${encoded.length})");
     if (encoded.isEmpty) return [];
     try {
       PolylinePoints polylinePoints = PolylinePoints();
       final points = polylinePoints.decodePolyline(encoded);
-      print("✅ 디코딩 완료: ${points.length}개 포인트");
       return points.map((p) => LatLng(p.latitude, p.longitude)).toList();
     } catch (e) {
       print("🚨 Polyline 디코딩 오류: $e");
@@ -163,7 +191,7 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    print("🔄 build() 호출됨 | 경로 개수: ${_savedRoutes.length}");
+    print(" build() 호출됨 | 경로 개수: ${_savedRoutes.length}");
     return Scaffold(
       appBar: AppBar(
         title: const Text('새 게시글 작성'),
@@ -197,8 +225,67 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
             ),
             const SizedBox(height: 20),
 
+            // 지역 선택
             const Text(
-              '📍 저장된 경로 선택',
+              ' 지역 선택',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _selectedRegion,
+              hint: const Text('지역을 선택하세요'),
+              items: _regions
+                  .map((region) =>
+                      DropdownMenuItem(value: region, child: Text(region)))
+                  .toList(),
+              onChanged: (value) {
+                setState(() => _selectedRegion = value);
+              },
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // 이미지 업로드 섹션
+            const Text(
+              '🖼 이미지 추가',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => _pickImage(ImageSource.gallery),
+                  icon: const Icon(Icons.photo),
+                  label: const Text("갤러리"),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: () => _pickImage(ImageSource.camera),
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text("카메라"),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (_selectedImage != null)
+              Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(
+                    _selectedImage!,
+                    height: 200,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 20),
+
+            // 경로 선택
+            const Text(
+              '🗺 저장된 경로 선택',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 8),
@@ -213,15 +300,13 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
                   bool isSelected = _selectedRoute == route;
                   return GestureDetector(
                     onTap: () {
-                      print("🖱 경로 선택: ${route['nameRoute']}");
                       setState(() {
                         _selectedRoute = isSelected ? null : route;
                       });
                     },
                     child: Card(
-                      color: isSelected
-                          ? Colors.blue.shade50
-                          : Colors.grey.shade100,
+                      color:
+                          isSelected ? Colors.blue.shade50 : Colors.grey.shade100,
                       child: ListTile(
                         title: Text(route['nameRoute'] ?? '이름 없는 경로'),
                         subtitle: Text(
@@ -245,13 +330,14 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "🗺 선택한 경로 미리보기",
+                    " 선택한 경로 미리보기",
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   StaticMapWidget(encoded: _selectedRoute!['encodedRoute']),
                 ],
               ),
+
             const SizedBox(height: 30),
             Center(
               child: ElevatedButton.icon(
@@ -271,54 +357,4 @@ class _CommunityNewThingsPageState extends State<CommunityNewThingsPage> {
       ),
     );
   }
-
-  /// ✅ 선택한 경로 지도 미리보기
-  /* Widget _buildRoutePreview(String encoded) {
-    print("🗺 지도 미리보기 생성 중...");
-    final decoded = _decodePolyline(encoded);
-
-    if (decoded.isEmpty) {
-      print("⚠️ 디코딩된 좌표 없음 — 미리보기 표시 안 함");
-      return const Padding(
-        padding: EdgeInsets.all(8.0),
-        child: Text('경로 데이터를 불러올 수 없습니다.'),
-      );
-    }
-
-    print("✅ 지도 미리보기 준비 완료 (${decoded.length} 포인트)");
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "🗺 선택한 경로 미리보기",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 200,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: decoded.first,
-                zoom: 15,
-              ),
-              polylines: {
-                Polyline(
-                  polylineId: const PolylineId("previewRoute"),
-                  points: decoded,
-                  color: Colors.blue,
-                  width: 4,
-                ),
-              },
-              zoomControlsEnabled: false,
-              myLocationButtonEnabled: false,
-              compassEnabled: false,
-            ),
-          ),
-        ),
-      ],
-    );
-  } */
-  
 }
