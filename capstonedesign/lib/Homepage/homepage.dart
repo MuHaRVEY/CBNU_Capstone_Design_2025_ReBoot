@@ -158,15 +158,6 @@ class HomePage extends StatelessWidget {
               );
             },
           ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text('로그아웃'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            },
-          ),
         ],
       ),
     );
