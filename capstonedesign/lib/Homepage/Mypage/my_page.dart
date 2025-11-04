@@ -8,6 +8,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:capstonedesign/Homepage/Community/community_detail.dart';
 import 'package:capstonedesign/Homepage/Community/community_challenge_detail.dart';
 import '../Flogging/route_detail.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:capstonedesign/Userinfo/login_page.dart'; // 로그인 페이지 경로에 맞게 수정
+
 
 class MyPage extends StatefulWidget {
   final String userId;
@@ -225,6 +229,36 @@ class _MyPageState extends State<MyPage> {
     }
   }
 
+  // 로그아웃 함수 추가
+Future<void> _logout() async {
+  try {
+    // Firebase 인증 로그아웃
+    await FirebaseAuth.instance.signOut();
+
+    // SharedPreferences 자동 로그인 상태 해제 (선택사항)
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isLoggedIn', false);
+
+    // 로그인 화면으로 이동 (이전 화면 모두 제거)
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginPage()),
+        (route) => false,
+      );
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('로그아웃되었습니다.')),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('로그아웃 실패: $e')),
+    );
+  }
+}
+
+
   String _formatDuration(Duration duration) {
     int hours = duration.inHours;
     int minutes = duration.inMinutes.remainder(60);
@@ -317,9 +351,7 @@ class _MyPageState extends State<MyPage> {
           children: [
             _buildBottomButton(Icons.settings, '설정', () {}),
             _buildBottomButton(Icons.notifications, '알림', () {}),
-            _buildBottomButton(Icons.logout, '로그아웃', () {
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            }),
+            _buildBottomButton(Icons.logout, '로그아웃', _logout),
           ],
         ),
       ),
