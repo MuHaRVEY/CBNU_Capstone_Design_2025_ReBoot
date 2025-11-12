@@ -46,6 +46,7 @@ class _MyPageState extends State<MyPage> {
   Map<String, dynamic>? lastSession;
   List<Map<String, dynamic>> workoutHistory = [];
   List<Map<String, dynamic>> ploggingRoutes = [];
+  List<Map<String, dynamic>> ploggingTrashRecords = [];
   List<String> currentChallengeIds = [];
   final String defaultImagePath = 'assets/images/image_firstpage_login.png';
 
@@ -187,6 +188,30 @@ class _MyPageState extends State<MyPage> {
         ploggingRoutes = tempRoutes; // ✅ 새로 만든 경로 리스트를 state에 반영
       });
     }
+    final trashRef =
+    FirebaseDatabase.instance.ref('users/${widget.userId}/ploggingRecords');
+    final trashSnapshot = await trashRef.get();
+
+    if (trashSnapshot.exists) {
+      final trashData = Map<String, dynamic>.from(trashSnapshot.value as Map);
+      final tempTrash = <Map<String, dynamic>>[];
+
+      trashData.forEach((key, value) {
+        final record = Map<String, dynamic>.from(value as Map);
+        record['key'] = key;
+        tempTrash.add(record);
+      });
+
+      tempTrash.sort((a, b) {
+        final at = a['timestamp'] ?? 0;
+        final bt = b['timestamp'] ?? 0;
+        return bt.compareTo(at);
+      });
+
+      setState(() {
+        ploggingTrashRecords = tempTrash;
+      });
+    }
   }
 
   /// ✅ 프로필 이미지 업로드 (기존과 동일)
@@ -277,7 +302,8 @@ Future<void> _logout() async {
         backgroundColor: Colors.green.shade700,
         foregroundColor: Colors.white,
       ),
-      body: Container(
+      body: SafeArea(
+       child: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
             image: AssetImage(defaultImagePath),
@@ -331,7 +357,9 @@ Future<void> _logout() async {
                   ],
                 ),
               ),
-
+            // 쓰레기 목록
+            if (ploggingTrashRecords.isNotEmpty)
+              _buildUniformTileContainer(_buildTrashRecordsDropdown()),
             // ✅ 진행중인 챌린지
             _buildUniformTileContainer(_buildChallengeDropdown()),
 
@@ -343,16 +371,28 @@ Future<void> _logout() async {
           ],
         ),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(color: Colors.white.withOpacity(0.8)),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildBottomButton(Icons.settings, '설정', () {}),
-            _buildBottomButton(Icons.notifications, '알림', () {}),
-            _buildBottomButton(Icons.logout, '로그아웃', _logout),
-          ],
+    ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: const Offset(0, -1),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildBottomButton(Icons.settings, '설정', () {}),
+              _buildBottomButton(Icons.notifications, '알림', () {}),
+              _buildBottomButton(Icons.logout, '로그아웃', _logout),
+            ],
+          ),
         ),
       ),
     );
@@ -427,19 +467,21 @@ Future<void> _logout() async {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
+
+          GridView.count(
+            shrinkWrap: true,
+            crossAxisCount: 3,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            physics: const NeverScrollableScrollPhysics(),
             children: [
-              // ✅ 4. 'totalDistance'가 미터(m) 단위이므로 km로 변환
               _buildStatItem(Icons.directions_walk, '이동거리',
                   '${(totalDistance / 1000).toStringAsFixed(2)} km'),
               _buildStatItem(Icons.timer, '운동시간',
                   _formatDuration(Duration(seconds: totalTime.toInt()))),
               _buildStatItem(Icons.speed, '평균속도',
                   '${averageSpeed.toStringAsFixed(1)} km/h'),
-              _buildStatItem(
-                  Icons.fitness_center, '운동횟수', '$totalSessions 회'),
+              _buildStatItem(Icons.fitness_center, '운동횟수', '$totalSessions 회'),
               _buildStatItem(Icons.article_outlined, '게시글', '$postCount 개'),
               _buildStatItem(Icons.flag, '챌린지참여', '$challengeCount 회'),
             ],
@@ -450,8 +492,11 @@ Future<void> _logout() async {
   }
 
   Widget _buildStatItem(IconData icon, String label, String value) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final itemWidth = (screenWidth - 80) / 3; // 좌우 여백 고려한 3등분
+
     return Container(
-      width: 105,
+      width: itemWidth,
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
@@ -459,20 +504,30 @@ Future<void> _logout() async {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, color: Colors.green, size: 24),
           const SizedBox(height: 4),
-          Text(value,
-              style:
-              const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          Text(label,
-              style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontSize: 11,
+            ),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
   }
-
-
 
   Widget _buildWorkoutHistoryDropdown() {
     return ExpansionTile(
@@ -589,6 +644,68 @@ Future<void> _logout() async {
                 );
               },
             );
+          },
+        );
+      }).toList(),
+    );
+  }
+
+  //수집한 쓰레기 목록
+  Widget _buildTrashRecordsDropdown() {
+    return ExpansionTile(
+      tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      title: const Text(
+        '🗑️ 수집한 쓰레기 목록',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+      ),
+      children: ploggingTrashRecords.map((record) {
+        final timestamp = record['timestamp'];
+        final date = timestamp != null
+            ? DateTime.fromMillisecondsSinceEpoch(timestamp)
+            .toString()
+            .substring(0, 16)
+            : '날짜 없음';
+        final categories =
+            (record['categories'] as List?)?.join(', ') ?? '카테고리 없음';
+        final imageUrl = record['imageUrl'] ?? '';
+
+        return ListTile(
+          leading: imageUrl.isNotEmpty
+              ? ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              imageUrl,
+              width: 50,
+              height: 50,
+              fit: BoxFit.cover,
+            ),
+          )
+              : const Icon(Icons.image_not_supported, color: Colors.grey),
+          title: Text(categories, style: const TextStyle(fontSize: 14)),
+          subtitle:
+          Text(date, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          onTap: () {
+            if (imageUrl.isNotEmpty) {
+              showDialog(
+                context: context,
+                builder: (_) => Dialog(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.network(imageUrl),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(categories,
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      Text(date, style: const TextStyle(color: Colors.grey)),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              );
+            }
           },
         );
       }).toList(),

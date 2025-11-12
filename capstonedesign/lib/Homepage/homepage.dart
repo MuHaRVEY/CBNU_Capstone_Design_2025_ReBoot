@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'Mypage/my_page.dart';
 import 'Community/community_entire.dart';
 import '../Game/gamepage.dart'; 
-import 'Flogging/gpt_map.dart'; 
+import 'Flogging/gpt_map.dart';
+import 'Environment/ai_environment_report.dart';
+
 
 class HomePage extends StatelessWidget {
   final String userId;
@@ -17,16 +19,16 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/image_firstpage_login.png',
-              fit: BoxFit.cover,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/image_firstpage_login.png',
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-          SafeArea(
-            child: Column(
+            Column(
               children: [
                 const SizedBox(height: 20),
                 Text(
@@ -38,6 +40,8 @@ class HomePage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
+
+                // ✅ 메인 이미지
                 Expanded(
                   child: Center(
                     child: Image.asset(
@@ -47,66 +51,72 @@ class HomePage extends StatelessWidget {
                     ),
                   ),
                 ),
-                Column(
-                  children: [
-                    // ✅ 커뮤니티 버튼
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => CommunityEntirePage(
-                              userId: userId,
-                              nickname: userName,
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      label: const Text('커뮤니티'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        minimumSize: const Size(250, 50),
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
 
-                    // ✅ 플로깅 버튼
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PolylineMapScreen(userId: userId),
+                // ✅ 버튼 그룹
+                Padding(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).padding.bottom + 20, // 하단 시스템바 + 추가여백
+                  ),
+                  child: Column(
+                    children: [
+                      // 커뮤니티 버튼
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CommunityEntirePage(
+                                userId: userId,
+                                nickname: userName,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.chat_bubble_outline),
+                        label: const Text('커뮤니티'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          minimumSize: const Size(250, 50),
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.map_outlined),
-                      label: const Text('플로깅'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        minimumSize: const Size(250, 50),
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+
+                      // 플로깅 버튼
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => PolylineMapScreen(userId: userId),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.map_outlined),
+                        label: const Text('플로깅'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          minimumSize: const Size(250, 50),
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 20),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: Colors.green.shade700,
@@ -126,7 +136,9 @@ class HomePage extends StatelessWidget {
               shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
-              builder: (context) => _buildSettingsSheet(context),
+              builder: (context) => SafeArea(
+                child: _buildSettingsSheet(context),
+              ),
             );
           }
         },
@@ -145,6 +157,7 @@ class HomePage extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 🧍 마이페이지
           ListTile(
             leading: const Icon(Icons.person),
             title: const Text('마이페이지'),
@@ -153,7 +166,27 @@ class HomePage extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => MyPage(userId: userId, nickname: userName),
+                  builder: (context) => MyPage(
+                    userId: userId,
+                    nickname: userName,
+                  ),
+                ),
+              );
+            },
+          ),
+
+          const Divider(), // 구분선
+
+          // 🌱 환경 리포트
+          ListTile(
+            leading: const Icon(Icons.eco_outlined, color: Colors.green),
+            title: const Text('환경 리포트'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AIEnvironmentReportPage(userId: userId),
                 ),
               );
             },
