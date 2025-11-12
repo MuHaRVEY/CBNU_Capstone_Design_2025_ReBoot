@@ -17,6 +17,7 @@ class FirebaseWorkoutService {
     int? pointCount,     // 👈 옵셔널 좌표 개수
     String? nameRoute,   // 👈 옵셔널 경로 이름
     int? ploggingPoints, // 👈 옵셔널 플로깅 포인트
+    String? address,
   }) async {
     try {
       final uid = _auth.currentUser?.uid;
@@ -74,7 +75,8 @@ class FirebaseWorkoutService {
           'time': duration.inSeconds,
           'speed': sessionSpeed,
           'isNavigation': isNavigation,
-          'savedRoute': savedRoute, // ✅ 경로 저장 여부 플래그 추가
+          'savedRoute': savedRoute, // 경로 저장 여부 플래그 추가
+          'address': address ?? '주소 없음',
           'date': DateTime.now().toIso8601String(),
         },
       });
