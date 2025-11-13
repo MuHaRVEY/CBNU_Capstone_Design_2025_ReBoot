@@ -4,8 +4,10 @@ import 'database_service.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:location/location.dart' as loc; // ✅ 접두사 추가로 충돌 해결
-import 'package:geocoding/geocoding.dart'; // ✅ 주소 변환 패키지
+import 'package:location/location.dart' as loc; // ✅ 충돌 방지용 접두사
+import 'package:geocoding/geocoding.dart'; // ✅ 주소 변환
+import '../../Camera/camera_page.dart'; // ✅ 카메라 페이지
+import '../../Homepage/homepage.dart'; // ✅ 홈으로 이동용 import 추가
 
 class TrashCameraPage extends StatefulWidget {
   final String imagePath;
@@ -20,7 +22,7 @@ class TrashCameraPage extends StatefulWidget {
 class _TrashCameraPageState extends State<TrashCameraPage> {
   final StorageService _storageService = StorageService();
   final DatabaseService _databaseService = DatabaseService();
-  final loc.Location _location = loc.Location(); // ✅ 충돌 방지
+  final loc.Location _location = loc.Location();
 
   final List<String> _categories = ['플라스틱', '캔', '종이', '유리', '일반쓰레기', '비닐'];
   Map<String, bool> _selectedCategories = {};
@@ -29,7 +31,7 @@ class _TrashCameraPageState extends State<TrashCameraPage> {
 
   double? _latitude;
   double? _longitude;
-  String? _address; // ✅ 주소 문자열
+  String? _address;
 
   final Map<String, String> _categoryApiMapping = {
     'plastic': '플라스틱',
@@ -43,12 +45,12 @@ class _TrashCameraPageState extends State<TrashCameraPage> {
   @override
   void initState() {
     super.initState();
-    _selectedCategories = {for (var category in _categories) category: false};
-    _initLocation(); // ✅ 위치 & 주소 가져오기
+    _selectedCategories = {for (var c in _categories) c: false};
+    _initLocation();
     _runPrediction();
   }
 
-    /// ✅ 현재 위치 및 주소 가져오기
+  /// ✅ 위치 및 상세 주소 가져오기
   Future<void> _initLocation() async {
     try {
       bool serviceEnabled = await _location.serviceEnabled();
@@ -63,36 +65,36 @@ class _TrashCameraPageState extends State<TrashCameraPage> {
         if (permissionGranted != loc.PermissionStatus.granted) return;
       }
 
-      final currentLocation = await _location.getLocation();
-      _latitude = currentLocation.latitude;
-      _longitude = currentLocation.longitude;
+      final current = await _location.getLocation();
+      _latitude = current.latitude;
+      _longitude = current.longitude;
 
       if (_latitude != null && _longitude != null) {
-        // ✅ 자세한 주소로 변환
         List<Placemark> placemarks = await placemarkFromCoordinates(_latitude!, _longitude!);
-
         if (placemarks.isNotEmpty) {
           final p = placemarks.first;
 
-          // ✅ 모든 세부 필드 조합
           _address = [
-            p.administrativeArea,   // 도, 광역시
-            p.locality,             // 시, 구
-            p.subLocality,          // 동
-            p.thoroughfare,         // 도로명
-        ].where((e) => e != null && e.isNotEmpty).join(' ');
+            p.administrativeArea,
+            p.locality,
+            p.subLocality,
+            p.thoroughfare,
+            p.subThoroughfare,
+            p.postalCode != null ? "(${p.postalCode})" : null,
+            p.country
+          ].where((e) => e != null && e.isNotEmpty).join(' ');
 
           print('📍 상세 주소: $_address');
         }
       }
 
-      setState(() {}); // UI 갱신
+      setState(() {});
     } catch (e) {
       print('⚠️ 위치 또는 주소 변환 중 오류: $e');
     }
   }
 
-  /// AI 예측
+  /// ✅ AI 예측 요청
   Future<void> _runPrediction() async {
     if (!mounted) return;
     setState(() => _isPredicting = true);
@@ -103,39 +105,37 @@ class _TrashCameraPageState extends State<TrashCameraPage> {
       final response = await request.send();
 
       if (response.statusCode == 200) {
-        final responseBody = await response.stream.bytesToString();
-        final predictions = json.decode(responseBody) as Map<String, dynamic>;
-        Map<String, bool> newSelections = {for (var category in _categories) category: false};
+        final res = await response.stream.bytesToString();
+        final predictions = json.decode(res) as Map<String, dynamic>;
+        Map<String, bool> newSelections = {for (var c in _categories) c: false};
 
         for (var apiLabel in predictions.keys) {
-          final koreanCategory = _categoryApiMapping[apiLabel];
-          if (koreanCategory != null && _categories.contains(koreanCategory)) {
+          final kor = _categoryApiMapping[apiLabel];
+          if (kor != null && _categories.contains(kor)) {
             final score = (predictions[apiLabel] as num).toDouble();
-            if (score >= 0.05) newSelections[koreanCategory] = true;
+            if (score >= 0.05) newSelections[kor] = true;
           }
         }
 
         if (!mounted) return;
-        setState(() {
-          _selectedCategories = newSelections;
-        });
+        setState(() => _selectedCategories = newSelections);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('AI 예측 실패: ${response.statusCode}')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('AI 예측 실패: ${response.statusCode}')));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI 예측 오류: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('AI 예측 오류: $e')));
     } finally {
       if (mounted) setState(() => _isPredicting = false);
     }
   }
 
-  /// ✅ 업로드 (주소 포함)
+  /// ✅ 업로드 및 후속 동작
   Future<void> _uploadData() async {
     final selectedList = _selectedCategories.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
+        .where((e) => e.value)
+        .map((e) => e.key)
         .toList();
 
     if (selectedList.isEmpty) {
@@ -157,21 +157,63 @@ class _TrashCameraPageState extends State<TrashCameraPage> {
         categories: selectedList,
         latitude: _latitude,
         longitude: _longitude,
-        address: _address, // ✅ 주소 저장
+        address: _address,
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ 성공적으로 기록되었습니다!')),
-      );
+      setState(() => _isUploading = false);
 
-      Navigator.of(context).popUntil((route) => route.isFirst);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('오류 발생: $e')),
+      // ✅ 저장 완료 후 다이얼로그 표시
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            title: const Text("기록 완료"),
+            content: const Text("사진이 성공적으로 저장되었습니다.\n더 찍으시겠습니까?"),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // 다이얼로그 닫기
+                  // ✅ 더 찍기: 카메라 페이지 다시 열기
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CameraPage(userId: widget.userId),
+                    ),
+                  );
+                },
+                child: const Text("아니요, 더 찍을래요",
+                    style: TextStyle(color: Colors.green)),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // 다이얼로그 닫기
+                  // ✅ 종료하기: Homepage로 이동
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => HomePage(
+                        userId: widget.userId,
+                        userName: "사용자", // 필요 시 실제 닉네임 전달
+                      ),
+                    ),
+                    (route) => false, // 이전 화면 스택 모두 제거
+                  );
+                },
+                child: const Text("예, 종료할래요",
+                    style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          );
+        },
       );
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploading = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('오류 발생: $e')));
     }
   }
 
@@ -191,7 +233,8 @@ class _TrashCameraPageState extends State<TrashCameraPage> {
             children: [
               Expanded(
                 flex: 4,
-                child: Image.file(File(widget.imagePath), fit: BoxFit.cover, width: double.infinity),
+                child: Image.file(File(widget.imagePath),
+                    fit: BoxFit.cover, width: double.infinity),
               ),
               Expanded(
                 flex: 2,
@@ -214,26 +257,32 @@ class _TrashCameraPageState extends State<TrashCameraPage> {
                                       CircularProgressIndicator(),
                                       SizedBox(height: 15),
                                       Text("AI가 사진을 분석중입니다...",
-                                          style: TextStyle(color: Colors.white70, fontSize: 16)),
+                                          style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 16)),
                                     ],
                                   ),
                                 )
                               : ListView.builder(
-                                  shrinkWrap: true,
                                   itemCount: _categories.length,
                                   itemBuilder: (context, index) {
                                     final category = _categories[index];
                                     return CheckboxListTile(
                                       title: Text(category,
-                                          style: const TextStyle(color: Colors.white, fontSize: 16)),
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16)),
                                       value: _selectedCategories[category],
-                                      activeColor: Theme.of(context).primaryColor,
+                                      activeColor:
+                                          Theme.of(context).primaryColor,
                                       checkColor: Colors.black,
-                                      controlAffinity: ListTileControlAffinity.leading,
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
                                       onChanged: (bool? newValue) {
                                         if (!_isPredicting) {
                                           setState(() {
-                                            _selectedCategories[category] = newValue!;
+                                            _selectedCategories[category] =
+                                                newValue!;
                                           });
                                         }
                                       },
@@ -244,17 +293,20 @@ class _TrashCameraPageState extends State<TrashCameraPage> {
                       ),
                       const SizedBox(height: 20),
                       ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-                        onPressed: (_isUploading || _isPredicting) ? null : _uploadData,
+                        style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 50)),
+                        onPressed:
+                            (_isUploading || _isPredicting) ? null : _uploadData,
                         icon: const Icon(Icons.upload),
-                        label: const Text("기록하기", style: TextStyle(fontSize: 18)),
+                        label: const Text("기록하기",
+                            style: TextStyle(fontSize: 18)),
                       ),
                       const SizedBox(height: 10),
-                      // ✅ 주소 정보 표시
                       if (_address != null)
                         Text(
                           "📍 $_address",
-                          style: const TextStyle(color: Colors.white70, fontSize: 14),
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 14),
                           textAlign: TextAlign.center,
                         ),
                     ],
@@ -273,7 +325,8 @@ class _TrashCameraPageState extends State<TrashCameraPage> {
                     CircularProgressIndicator(),
                     SizedBox(height: 15),
                     Text("데이터를 저장중입니다...",
-                        style: TextStyle(color: Colors.white, fontSize: 16)),
+                        style:
+                            TextStyle(color: Colors.white, fontSize: 16)),
                   ],
                 ),
               ),
