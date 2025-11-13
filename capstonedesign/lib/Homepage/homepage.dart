@@ -178,6 +178,7 @@ class HomePage extends StatelessWidget {
           const Divider(), // 구분선
 
           // 🌱 환경 리포트
+          // 🌱 환경 리포트
           ListTile(
             leading: const Icon(Icons.eco_outlined, color: Colors.green),
             title: const Text('환경 리포트'),
@@ -186,7 +187,9 @@ class HomePage extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => AIEnvironmentReportPage(userId: userId),
+                  builder: (context) => AIEnvironmentReportPage(
+                    userId: userId,
+                  ),
                 ),
               );
             },

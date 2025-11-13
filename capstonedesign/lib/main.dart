@@ -16,6 +16,7 @@ import 'package:capstonedesign/Userinfo/auto_login_redirect.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+
   // ✅ Firebase 초기화
   if (kIsWeb) {
     await Firebase.initializeApp(
