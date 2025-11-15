@@ -8,7 +8,8 @@ import 'community_newthings.dart';
 import 'community_detail.dart';
 import 'community_challenge.dart';
 import 'community_makechallenge.dart';
-import 'community_ad_wrapper.dart';
+import 'Ads/community_ad_wrapper.dart';
+import '../homepage.dart';
 
 class CommunityEntireTab extends StatelessWidget {
   final void Function(String postId) openDetailPage;
@@ -214,13 +215,13 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
     );
   }
 
-  Future<void> _clearAdBlock() async {
+  /* Future<void> _clearAdBlock() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('ad_block_until');
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('광고 차단 초기화됨')),
     );
-  }
+  } */
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +254,7 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                       ),
                     ),
                   ),
-                  Padding(
+                  /* Padding(
                     padding: const EdgeInsets.only(left: 16.0, top: 8.0),
                     child: Align(
                       alignment: Alignment.centerLeft,
@@ -266,19 +267,37 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
                         child: const Text('광고 차단 초기화'),
                       ),
                     ),
-                  ),
+                  ), */
                   const SizedBox(height: 8),
+
+                  /// ✅ 여기 부분 수정됨 — 커뮤니티와 같은 행에 뒤로가기 버튼 추가
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Row(
-                      children: const [
-                        Icon(Icons.people_alt_outlined, color: Colors.black),
-                        SizedBox(width: 8),
-                        Text('커뮤니티',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
+                          onPressed: () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => HomePage(
+                                  userId: widget.userId,
+                                  userName: widget.nickname,),
+                              ),
+                            );
+                          },
+                        ),
+                        const Icon(Icons.people_alt_outlined, color: Colors.black),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '커뮤니티',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
                       ],
                     ),
                   ),
+
                   Container(
                     color: Colors.white.withOpacity(0.95),
                     child: TabBar(
@@ -334,14 +353,14 @@ class _CommunityEntirePageState extends State<CommunityEntirePage>
               MaterialPageRoute(
                 builder: (context) => isChallengeTab
                     ? CommunityMakeChallengePage(
-                  userId: widget.userId,
-                  nickname: widget.nickname,
-                  region: '',
-                )
+                        userId: widget.userId,
+                        nickname: widget.nickname,
+                        region: '',
+                      )
                     : CommunityNewThingsPage(
-                  userId: widget.userId,
-                  nickname: widget.nickname,
-                ),
+                        userId: widget.userId,
+                        nickname: widget.nickname,
+                      ),
               ),
             );
           },

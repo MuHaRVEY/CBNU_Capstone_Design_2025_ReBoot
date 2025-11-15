@@ -1,23 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'firebase/firebase_options.dart';
+
 import 'package:provider/provider.dart';
-import 'coin_provider.dart';
+import 'package:capstonedesign/Game/coin_provider.dart';
+import 'package:capstonedesign/Game/pet_provider.dart'; // ★ 추가
+
 import 'first_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'auto_login_redirect.dart';
+import 'package:capstonedesign/Userinfo/auto_login_redirect.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+
+  // ✅ Firebase 초기화
   if (kIsWeb) {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } else {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
+  // ✅ Firebase App Check 활성화
+  if (kIsWeb) {
+    await FirebaseAppCheck.instance.activate();
+  } else {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.debug,
+      appleProvider: AppleProvider.deviceCheck,
+    );
   }
 
   // ✅ SharedPreferences와 FirebaseAuth를 이용한 자동 로그인 확인
@@ -26,10 +44,13 @@ void main() async {
   final currentUser = FirebaseAuth.instance.currentUser;
   final bool isLoggedIn = autoLogin && currentUser != null;
 
-  // ✅ CoinProvider 초기화와 함께 앱 실행
+  // ✅ CoinProvider + PetProvider 주입 후 앱 실행
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => CoinProvider()..init(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CoinProvider()..init()),
+        ChangeNotifierProvider(create: (_) => PetProvider()..init()), // ★ 추가
+      ],
       child: RebootApp(isLoggedIn: isLoggedIn),
     ),
   );
@@ -45,7 +66,6 @@ class RebootApp extends StatelessWidget {
     return MaterialApp(
       title: 'Re:Boot',
       debugShowCheckedModeBanner: false,
-      // ✅ 자동 로그인 여부에 따라 첫 화면 분기
       home: isLoggedIn ? const AutoLoginRedirect() : const FirstPage(),
     );
   }
