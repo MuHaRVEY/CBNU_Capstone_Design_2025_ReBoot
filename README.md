@@ -1,4 +1,4 @@
-Re 🌱
+🌱 Re: Boot
 
 플로깅을 기록하고, AI로 쓰레기를 분류하며, 게임과 커뮤니티를 통해 환경 활동을 지속하도록 돕는 모바일 애플리케이션
 
@@ -256,8 +256,6 @@ AI 기반 쓰레기 기록 자동화
   &nbsp;&nbsp;
   <img src="./capstonedesign/assets/images/image_app_homepage.png" width="220" alt="Re:Boot 홈 화면" />
 </p>
-
-실제 실행 화면 이미지가 추가되면 플로깅 지도, AI 분류, 환경 리포트, 커뮤니티, 게임 화면을 함께 배치하는 것을 권장합니다.
 
 <br>
 
